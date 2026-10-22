@@ -181,3 +181,15 @@ def test_verifier_accepts_range_across_skipped_lines():
     assert verifier.check(good, ctx)[1]
     bad = Verdict(verdict="likely_false_positive", confidence_score=0.9, evidence=[Evidence(file="app.py", lines="54-56")])
     assert not verifier.check(bad, ctx)[1]
+
+def test_slicer_keeps_the_condition_that_chooses_the_value():
+    """bar is a constant or user input depending on an if or a match. The slice must show the condition and
+    the values it tests, or the model cannot tell which branch runs (control dependence)."""
+    evals = [i for i, l in enumerate((FIX / FLOW).read_text().splitlines(), 1) if l.strip() == "eval(bar)"]
+    text_if, text_case = ("\n".join(t for _, t in slicer.build(_finding(n, cwe="CWE-95", file=FLOW), str(FIX), 2).lines)
+                          for n in evals)
+    for s in ["num = 86", "if 7 * 42 - num > 200:", "else:", "bar = param"]:
+        assert s in text_if
+    for s in ['possible = "ABC"', "guess = possible[1]", "match guess:", "case 'B':"]:
+        assert s in text_case
+    assert "noise" not in text_if and "noise" not in text_case  

@@ -95,6 +95,7 @@ def _slice_lines(fn, sink: ast.stmt, trace_lines: Set[int]) -> Set[int]:
       - assignments to a relevant name (x = ..., x += ..., x: T = ...)
       - method calls that change a relevant object (conf.set(..., param), items.append(param))
       - for-loop and with-statement headers that bind a relevant name
+      - if/while conditions that decide whether a kept line runs (control dependence), and the names they test
     Also keeps guards (if / while / assert) that test a relevant name, because a check that
     rejects bad input is often the reason an alert is a false positive.
     """
@@ -131,6 +132,21 @@ def _slice_lines(fn, sink: ast.stmt, trace_lines: Set[int]) -> Set[int]:
                 new = set().union(*[_names(i.context_expr) for i in s.items])
             if new - relevant:
                 relevant |= new
+                changed = True
+        # Control dependence: if a kept line sits inside an if/while, keep the condition (and the else: line),
+        # because the condition decides which assignment reaches the sink. Its names become relevant too.
+        for s in before:
+            if isinstance(s, (ast.If, ast.While)) and not _span(s, header_only=True) <= wanted:
+                if (_span(s) - _span(s, header_only=True)) & wanted:
+                    wanted |= _span(s, header_only=True)
+                    if s.orelse:
+                        wanted |= set(range(s.body[-1].end_lineno + 1, s.orelse[0].lineno))
+                    if _names(s.test) - relevant:
+                        relevant |= _names(s.test)
+                    changed = True
+            elif isinstance(s, ast.Match) and s.lineno not in wanted and (wanted - _span(sink)) & (_span(s) - {s.lineno}):
+                wanted |= {s.lineno} | {c.pattern.lineno for c in s.cases}   # match line and every case line
+                relevant |= _names(s.subject)
                 changed = True
     for s in before:  # guard statements that mention relevant names
         if isinstance(s, (ast.If, ast.While)) and _names(s.test) & relevant:

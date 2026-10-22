@@ -23,3 +23,27 @@ def dead_branch(param):
     sql = "SELECT name FROM users WHERE password = ?"
     cur = sqlite3.connect(':memory:').cursor()
     cur.execute(sql, (bar,))
+
+
+def branch_decides(param):
+    num = 86
+    if 7 * 42 - num > 200:
+        bar = 'This_should_always_happen'
+    else:
+        bar = param
+    noise = "not used"
+    eval(bar)
+
+
+def case_decides(param):
+    possible = "ABC"
+    guess = possible[1]
+    match guess:
+        case 'A':
+            bar = param
+        case 'B':
+            bar = 'bob'
+        case _:
+            bar = param
+    noise = "not used"
+    eval(bar)    

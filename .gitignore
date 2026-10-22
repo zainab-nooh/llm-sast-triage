@@ -8,3 +8,4 @@ bandit.json
 .pytest_cache/
 data/benchmark-python/
 data/semgrep-rules/
+results-reason-first.txt

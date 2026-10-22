@@ -13,19 +13,19 @@ Rules:
 - Evidence line numbers must be numbers shown at the left of the code.
 - Answer with one JSON object and nothing else."""
 
+
 SCHEMA = """{
   "finding_id": "<id>",
-  "verdict": "confirmed | likely_false_positive | uncertain",
-  "confidence_score": 0.0 to 1.0,
+  "evidence": [{"file": "<path>", "lines": "<first>-<last>", "why": "<short reason>"}],
+  "reasoning": "<trace the value step by step, based only on the code shown>",
   "sanitization_present": true or false,
   "attack_feasible": true or false,
+  "verdict": "confirmed | likely_false_positive | uncertain  (must agree with your reasoning)",
+  "confidence_score": 0.0 to 1.0,
   "policy_rule_id": "<policy rule id>",
   "cwe": "<CWE id>",
-  "evidence": [{"file": "<path>", "lines": "<first>-<last>", "why": "<short reason>"}],
-  "reasoning": "<short explanation based only on the code shown>",
   "suggested_fix": "<one or two sentences>"
 }"""
-
 
 def build(finding: Finding, ctx: Context, policy: dict) -> tuple[str, str]:
     rubric = "\n".join(f"- {r}" for r in policy["rubric"])

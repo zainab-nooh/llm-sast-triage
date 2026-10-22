@@ -1,0 +1,14 @@
+id: SEC-012
+cwe: CWE-614
+title: Sensitive cookie without the Secure flag
+rubric:
+- A cookie set with secure=True is only sent over HTTPS, so the alert does not apply.
+- A cookie set without secure=True, or with secure=False, can be sent over plain HTTP.
+- Look at the exact set_cookie call the alert points to; other cookies in the same file do not matter.
+examples:
+- code: response.set_cookie('session', value, secure=True, httponly=True)
+  verdict: likely_false_positive
+  why: Secure flag is set.
+- code: response.set_cookie('session', value, secure=False)
+  verdict: confirmed
+  why: Cookie can be sent over plain HTTP.

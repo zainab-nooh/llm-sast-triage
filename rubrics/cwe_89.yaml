@@ -1,0 +1,18 @@
+id: SEC-002
+cwe: CWE-89
+title: SQL injection
+rubric:
+- Escaping quotes by hand (replace("'", "''")) is not a reliable fix.
+- Placeholders with separate parameters (tuple, list, or dict) are safe.
+- String concatenation, f-strings, % formatting, or .format() with user data inside SQL are unsafe.
+- URL decoding or HTML escaping is NOT a SQL sanitizer.
+- A check that aborts on bad input (validation) protects the sink; changing a copy of the value (sanitization)
+  may not.
+- 'Table or column names cannot be parameterized: they are safe only if chosen from a fixed allow-list.'
+examples:
+- code: cur.execute('SELECT * FROM users WHERE name = ?', (name,))
+  verdict: likely_false_positive
+  why: Parameter binding keeps data separate from the query.
+- code: cur.execute("SELECT * FROM users WHERE name = '" + name + "'")
+  verdict: confirmed
+  why: User data is concatenated into the query.

@@ -1,0 +1,67 @@
+# Local Semgrep rules: they work offline and give reproducible results.
+# Simple policies from policy/policy.yaml can be enforced here without any model.
+rules:
+  - id: sql-string-building
+    languages: [python]
+    severity: ERROR
+    message: SQL query built from a string (concatenation, f-string, % or format)
+    metadata: {cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"], owasp: ["A05:2025 - Injection"]}
+    pattern-either:
+      - pattern: $CUR.execute($Q + ...)
+      - pattern: $CUR.execute(f"...")
+      - pattern: $CUR.execute("..." % ...)
+      - pattern: $CUR.execute("...".format(...))
+      - pattern: |
+          $Q = "..." + ...
+          ...
+          $CUR.execute($Q)
+      - pattern: |
+          $Q = "..." % ...
+          ...
+          $CUR.execute($Q)
+  - id: subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: subprocess call with shell=True
+    metadata: {cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"], owasp: ["A05:2025 - Injection"]}
+    pattern: subprocess.$FUNC(..., shell=True, ...)
+  - id: weak-hash
+    languages: [python]
+    severity: WARNING
+    message: MD5 or SHA-1 used
+    metadata: {cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"], owasp: ["A04:2025 - Cryptographic Failures"]}
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+  - id: eval-exec
+    languages: [python]
+    severity: ERROR
+    message: eval or exec with a non-constant argument
+    metadata: {cwe: ["CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"], owasp: ["A05:2025 - Injection"]}
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: exec($X)
+  - id: unsafe-deserialization
+    languages: [python]
+    severity: ERROR
+    message: pickle used to load data
+    metadata: {cwe: ["CWE-502: Deserialization of Untrusted Data"], owasp: ["A08:2025 - Software or Data Integrity Failures"]}
+    pattern-either:
+      - pattern: pickle.loads(...)
+      - pattern: pickle.load(...)
+  - id: tls-verify-disabled
+    languages: [python]
+    severity: ERROR
+    message: TLS certificate verification disabled
+    metadata: {cwe: ["CWE-295: Improper Certificate Validation"], owasp: ["A07:2025 - Authentication Failures"]}
+    pattern: requests.$F(..., verify=False, ...)
+  - id: hardcoded-secret
+    languages: [python]
+    severity: WARNING
+    message: Possible hard-coded secret
+    metadata: {cwe: ["CWE-798: Use of Hard-coded Credentials"], owasp: ["A07:2025 - Authentication Failures"]}
+    patterns:
+      - pattern: $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (?i).*(password|passwd|secret|api_key|token).*

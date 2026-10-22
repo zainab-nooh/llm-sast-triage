@@ -1,0 +1,15 @@
+id: SEC-007
+cwe: CWE-502
+title: Unsafe deserialization
+rubric:
+- pickle, marshal, and yaml.load (without SafeLoader) on untrusted data can run code.
+- Deserializing data that the program itself wrote and that users cannot modify is lower risk, but check
+  the storage.
+- yaml.safe_load and json.loads are safe choices for untrusted input.
+examples:
+- code: yaml.safe_load(text)
+  verdict: likely_false_positive
+  why: Safe loader.
+- code: pickle.loads(request.data)
+  verdict: confirmed
+  why: Untrusted bytes are unpickled.

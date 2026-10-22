@@ -1,0 +1,19 @@
+id: SEC-004
+cwe: CWE-22
+title: Path traversal
+rubric:
+- A filename that is checked against an allow-list or a fixed folder lookup is safe.
+- os.path.join with user data does NOT stop '..' or absolute paths by itself.
+- Resolving the path and checking it stays inside the base folder is a valid defense.
+- Using only os.path.basename(user_value) removes folder parts but still check the final name.
+examples:
+- code: 'p = (BASE / name).resolve()
+
+    if BASE not in p.parents: abort(400)
+
+    open(p)'
+  verdict: likely_false_positive
+  why: Resolved path is checked to stay inside the base folder.
+- code: open(os.path.join(BASE, name))
+  verdict: confirmed
+  why: '''..'' in name is not blocked.'

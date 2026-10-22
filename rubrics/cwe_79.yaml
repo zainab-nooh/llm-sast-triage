@@ -1,0 +1,16 @@
+id: SEC-005
+cwe: CWE-79
+title: Cross-site scripting
+rubric:
+- Auto-escaping template engines make normal variable output safe.
+- Marking data as safe (Markup, |safe, mark_safe) or building HTML with string formatting is unsafe with
+  user data.
+- Escaping must match the output context (HTML body, attribute, JavaScript, URL).
+- Returning JSON with the correct content type is not an HTML injection risk.
+examples:
+- code: return render_template('page.html', name=name)
+  verdict: likely_false_positive
+  why: Template engine escapes by default.
+- code: return '<h1>Hello ' + name + '</h1>'
+  verdict: confirmed
+  why: User data placed directly into HTML.

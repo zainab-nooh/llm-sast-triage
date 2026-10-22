@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Code review report {{ run_id }}</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:960px;margin:30px auto;padding:0 16px;color:#2b2420}
+h1{font-weight:400}.card{border:1px solid #e3d9d3;border-radius:12px;padding:12px 16px;margin:10px 0;background:#faf7f5}
+.tag{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#a8714f}pre{background:#3b2e27;color:#f4eae3;padding:12px;border-radius:8px;overflow-x:auto;font-size:12.5px}
+.sum span{display:inline-block;background:#a8714f;color:#fff;border-radius:99px;padding:2px 12px;margin-right:6px;font-size:13px}</style></head><body>
+<h1>Code review report</h1>
+<p>Run {{ run_id }} | provider {{ config.provider }} | model {{ config.model }} | context level {{ config.context_level }} | threshold {{ config.threshold }}</p>
+<p class="sum"><span>{{ total }} alerts</span><span>{{ groups.confirmed|length }} confirmed</span><span>{{ groups.uncertain|length }} need review</span><span>{{ groups.suppressed|length }} hidden as likely false positives</span></p>
+{% for key, title in [("confirmed","Confirmed vulnerabilities"),("uncertain","Needs human review"),("suppressed","Hidden as likely false positives (check these too)"),("scanner_only","Scanner only (no model judgement)")] %}
+{% if groups[key] %}<h2>{{ title }}</h2>
+{% for r in groups[key] %}<div class="card"><div class="tag">{{ r.finding.cwe or "no CWE" }} | {{ r.finding.tool }} | {{ r.finding.rule_id }}</div>
+<b>{{ r.finding.file }}:{{ r.finding.start_line }}</b> - {{ r.finding.message }}
+{% if r.verdict %}<p>Verdict: <b>{{ r.verdict.verdict }}</b> (confidence {{ r.verdict.confidence_score }}) | {{ r.decision.reason }}</p>
+<p>{{ r.verdict.reasoning }}</p>{% if r.verdict.suggested_fix %}<p><i>Fix:</i> {{ r.verdict.suggested_fix }}</p>{% endif %}
+{% for e in r.verdict.evidence %}<p><i>Evidence {{ e.file }}:{{ e.lines }}</i> {{ e.why }}</p>{% endfor %}{% endif %}
+{% if r.context %}<pre>{% for n, t in r.context.lines %}{{ "%4d" % n }} | {{ t }}
+{% endfor %}</pre>{% endif %}</div>{% endfor %}{% endif %}{% endfor %}
+</body></html>

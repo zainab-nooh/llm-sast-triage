@@ -1,0 +1,18 @@
+id: SEC-011
+cwe: CWE-611
+title: XML external entities (XXE)
+rubric:
+- XXE needs both untrusted XML and a parser that resolves external entities.
+- xml.sax parsers resolve external general entities only when feature_external_ges is turned on; the default is off in Python 3.7.1 and later.
+- lxml parsers with resolve_entities=True (the default) or no_network=False need review; defusedxml is safe.
+- If the XML does not come from the user, the alert is not exploitable.
+examples:
+- code: |
+    parser = xml.sax.make_parser()
+    parser.setFeature(xml.sax.handler.feature_external_ges, True)
+    xml.sax.parseString(user_xml, handler)
+  verdict: confirmed
+  why: External entities are turned on and the XML comes from the user.
+- code: defusedxml.ElementTree.fromstring(user_xml)
+  verdict: likely_false_positive
+  why: defusedxml blocks entity expansion.

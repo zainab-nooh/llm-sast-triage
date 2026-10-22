@@ -1,0 +1,16 @@
+# A simulated organization security policy, based on public standards (OWASP Top 10:2025, CWE).
+# Replace or extend it with a real policy if your company or supervisor can share one.
+# OWASP categories checked against the tags in the Semgrep community rules (October 2026); confirm on owasp.org/Top10.
+rules:
+  - {id: SEC-001, title: No hard-coded credentials or secrets, cwe: CWE-798, owasp: "A07:2025 Authentication Failures"}
+  - {id: SEC-002, title: Database queries must be parameterized, cwe: CWE-89, owasp: "A05:2025 Injection"}
+  - {id: SEC-003, title: Do not run shell commands built from untrusted input, cwe: CWE-78, owasp: "A05:2025 Injection"}
+  - {id: SEC-004, title: File paths from users must be validated, cwe: CWE-22, owasp: "A01:2025 Broken Access Control"}
+  - {id: SEC-005, title: Output sent to browsers must be escaped, cwe: CWE-79, owasp: "A05:2025 Injection"}
+  - {id: SEC-006, title: No weak hashes or broken cryptography, cwe: CWE-327, owasp: "A04:2025 Cryptographic Failures"}
+  - {id: SEC-007, title: No unsafe deserialization of untrusted data, cwe: CWE-502, owasp: "A08:2025 Software or Data Integrity Failures"}
+  - {id: SEC-008, title: No eval or exec on untrusted input, cwe: CWE-95, owasp: "A05:2025 Injection"}
+  - {id: SEC-009, title: TLS certificate verification must not be disabled, cwe: CWE-295, owasp: "A07:2025 Authentication Failures"}
+  - {id: SEC-010, title: No sensitive data in logs, cwe: CWE-532, owasp: "A09:2025 Security Logging and Alerting Failures"}
+  - {id: SEC-011, title: XML parsers must not resolve external entities, cwe: CWE-611, owasp: "A02:2025 Security Misconfiguration"}
+  - {id: SEC-012, title: Session and sensitive cookies must use the Secure flag, cwe: CWE-614, owasp: "A02:2025 Security Misconfiguration"}

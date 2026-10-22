@@ -1,0 +1,2 @@
+date,run_id,setup,provider,model,context_level,threshold,votes,fp_removed,real_lost,precision,recall,f1,f2,cost,seconds,notes
+2026-10-14,(rerun on your machine),A scanner only,none,none,-,-,-,0,0,0.473,1.0,0.642,0.818,0,46,"6 CWEs (89,78,94/95,502,611,614); 88 TP 98 FP; benchmark f129148; semgrep-rules 9bbf021"

@@ -1,0 +1,16 @@
+id: SEC-006
+cwe: CWE-327
+title: Weak hash or cryptography
+rubric:
+- MD5 or SHA-1 are weak for passwords, signatures, and security tokens.
+- MD5 or SHA-1 used only as a non-security checksum (cache key, file fingerprint) is lower risk; look
+  at how the value is used.
+- Passwords need a slow salted hash such as bcrypt, scrypt, or Argon2.
+- Look for usedforsecurity=False which documents a non-security use.
+examples:
+- code: 'hashlib.md5(data, usedforsecurity=False).hexdigest()  # cache key'
+  verdict: likely_false_positive
+  why: Non-security checksum.
+- code: hashlib.md5(password.encode()).hexdigest()
+  verdict: confirmed
+  why: Weak hash used for passwords.

@@ -1,0 +1,15 @@
+id: SEC-003
+cwe: CWE-78
+title: OS command injection
+rubric:
+- A fixed command list with shell=False and no user data in the arguments is safe.
+- shell=True with any user-controlled part of the command string is unsafe.
+- Quoting with shlex.quote on every user value reduces risk but still needs review.
+- A command argument chosen from a fixed allow-list is safe.
+examples:
+- code: subprocess.run(['ls', '-l'], check=True)
+  verdict: likely_false_positive
+  why: Fixed argument list, no shell.
+- code: subprocess.run('ping ' + host, shell=True)
+  verdict: confirmed
+  why: User data inside a shell command string.

@@ -1,0 +1,7 @@
+file,cwe,real_vulnerability
+app,CWE-89,true
+app,CWE-78,true
+app,CWE-798,true
+app,CWE-259,true
+app,CWE-327,false
+safe_query,CWE-89,false

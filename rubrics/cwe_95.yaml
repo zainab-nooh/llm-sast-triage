@@ -1,0 +1,15 @@
+id: SEC-008
+cwe: CWE-95
+title: Code injection (eval and exec)
+rubric:
+- eval() or exec() on a string that contains user data lets the user run Python code.
+- A value that is replaced by a constant, or that a check rejects before the call, cannot reach eval or exec.
+- ast.literal_eval only reads Python literals (numbers, strings, lists, dicts) and is safe for untrusted input.
+- A check that only allows a plain quoted string literal (no quotes inside, nothing around it) blocks code injection.
+examples:
+- code: ast.literal_eval(user_text)
+  verdict: likely_false_positive
+  why: literal_eval cannot run code.
+- code: eval(request.args.get('expr'))
+  verdict: confirmed
+  why: User text is run as Python code.

@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.env
+runs/*
+!runs/.gitkeep
+*.sarif
+bandit.json
+.pytest_cache/
+data/benchmark-python/
+data/semgrep-rules/

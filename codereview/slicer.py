@@ -195,10 +195,19 @@ def build(finding: Finding, root: str, level: int = 2) -> Context:
             trace_lines = {int(t.rsplit(":", 1)[1]) for t in finding.trace
                            if t.rsplit(":", 1)[0] == finding.file and t.rsplit(":", 1)[1].isdigit()
                            and fn.lineno <= int(t.rsplit(":", 1)[1]) <= (fn.end_lineno or fn.lineno)}
-            wanted = _slice_lines(fn, sink, trace_lines)
+            if isinstance(sink, (ast.Import, ast.ImportFrom)):
+                # The alert is on an import line ("use defusedxml"), which has no data flow of its own.
+                # Slice from the later statements that use the imported module instead.
+                mods = {(a.asname or a.name).split(".")[0] for a in sink.names}
+                uses = [s for s in _stmts(fn) if s.lineno > sink.lineno and _names(s) & mods
+                        and not isinstance(s, (ast.If, ast.While, ast.For, ast.With, ast.Try))][:3]
+                wanted = _span(sink).union(*[_slice_lines(fn, u, trace_lines) for u in uses])
+                note = "The alert is on an import line; the slice also shows where the module is used."
+            else:
+                wanted = _slice_lines(fn, sink, trace_lines)
             if level >= 3:
                 wanted |= _helpers(tree, fn, wanted)
-            if not finding.trace:
+            if not finding.trace and not note:
                 note = "No scanner trace, slice built from the code structure."
     chosen = sorted(n for n in wanted if 1 <= n <= len(lines))
     return Context(level=level, file=finding.file, lines=[(n, lines[n - 1]) for n in chosen], note=note)

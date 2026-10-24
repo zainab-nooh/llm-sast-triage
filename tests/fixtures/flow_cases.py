@@ -46,4 +46,14 @@ def case_decides(param):
         case _:
             bar = param
     noise = "not used"
-    eval(bar)    
+    eval(bar)
+
+
+
+
+def import_alert(param):
+    bar = param
+    import xml.sax
+    noise = "not used"
+    parser = xml.sax.make_parser()
+    xml.sax.parseString(bar, parser)        

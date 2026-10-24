@@ -192,4 +192,18 @@ def test_slicer_keeps_the_condition_that_chooses_the_value():
         assert s in text_if
     for s in ['possible = "ABC"', "guess = possible[1]", "match guess:", "case 'B':"]:
         assert s in text_case
-    assert "noise" not in text_if and "noise" not in text_case  
+    assert "noise" not in text_if and "noise" not in text_case 
+
+
+
+
+
+
+def test_slicer_follows_the_module_when_the_alert_is_on_an_import():
+    """An alert on `import xml.sax` has no data flow, so the slice must show where the module is used."""
+    line = next(i for i, l in enumerate((FIX / FLOW).read_text().splitlines(), 1) if l.strip() == "import xml.sax")
+    ctx = slicer.build(_finding(line, cwe="CWE-611", file=FLOW), str(FIX), 2)
+    text = "\n".join(t for _, t in ctx.lines)
+    for s in ["bar = param", "import xml.sax", "parser = xml.sax.make_parser()", "xml.sax.parseString(bar, parser)"]:
+        assert s in text
+    assert "noise" not in text and "import line" in ctx.note     

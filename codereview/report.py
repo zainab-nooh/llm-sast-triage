@@ -22,5 +22,5 @@ def build(runs_dir: str, run_id: str) -> Path:
     html = env.get_template("report.html.j2").render(run_id=run_id, groups=groups, total=len(rows),
                                                      config=store.load_config(runs_dir, run_id))
     out = Path(runs_dir) / run_id / "report.html"
-    out.write_text(html)
+    out.write_text(html, encoding="utf-8")  # utf-8, or Windows fails on characters like emoji in model text
     return out

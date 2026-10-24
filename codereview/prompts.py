@@ -9,6 +9,8 @@ Rules:
   Sanitization means changing a local copy of a value, which may not protect the original source.
 - Follow the value that reaches the flagged line backwards. If it is always replaced by a constant (for example
   because an if-condition is always true or always false), user data cannot reach it.
+- The code is a slice: lines marked "..." were left out because they do not assign, change or configure any
+  variable used in the shown lines. If a setting (for example a parser feature) is not shown, it was not changed.
 - Only answer "likely_false_positive" if you can cite specific lines that make the attack impossible.
 - Evidence line numbers must be numbers shown at the left of the code.
 - Answer with one JSON object and nothing else."""

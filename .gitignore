@@ -10,3 +10,4 @@ data/benchmark-python/
 data/semgrep-rules/
 results-reason-first.txt
 results-502-611-614.txt
+results-611-502.txt

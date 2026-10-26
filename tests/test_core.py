@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from codereview import evaluate as ev
-from codereview import gate, ingest, pipeline, slicer, store, verifier
+from codereview import gate, ingest, pipeline, prompts, slicer, store, verifier
 from codereview.config import Config
 from codereview.models import Context, Evidence, Finding, Verdict
 
@@ -206,4 +206,32 @@ def test_slicer_follows_the_module_when_the_alert_is_on_an_import():
     text = "\n".join(t for _, t in ctx.lines)
     for s in ["bar = param", "import xml.sax", "parser = xml.sax.make_parser()", "xml.sax.parseString(bar, parser)"]:
         assert s in text
-    assert "noise" not in text and "import line" in ctx.note     
+    assert "noise" not in text and "import line" in ctx.note
+
+
+
+
+def test_alerts_in_one_function_are_grouped_and_judged_together():
+    """Two alerts with the same CWE in one function get one merged slice and one prompt that lists both."""
+    src = (FIX / FLOW).read_text().splitlines()
+    imp = next(i for i, l in enumerate(src, 1) if l.strip() == "import xml.sax")
+    sink = next(i for i, l in enumerate(src, 1) if l.strip() == "xml.sax.parseString(bar, parser)")
+    a, b = _finding(imp, cwe="CWE-611", file=FLOW), _finding(sink, cwe="CWE-611", file=FLOW)
+    assert slicer.function_key(a, str(FIX)) == slicer.function_key(b, str(FIX)) is not None
+    ctx = slicer.merge([slicer.build(a, str(FIX), 2), slicer.build(b, str(FIX), 2)])
+    assert {imp, sink} <= set(ctx.numbers())
+    _, user = prompts.build(a, ctx, {"id": "SEC-011", "title": "XXE", "rubric": ["r"]}, [b])
+    assert f"lines {sink}-{sink}" in user and "ALL of them are safe" in user
+
+
+def test_slicer_shows_helper_functions_from_other_files():
+    """get_safe_value is defined in another file. With helper_dirs, its body is shown and can be cited as evidence."""
+    line = next(i for i, l in enumerate((FIX / FLOW).read_text().splitlines(), 1) if l.strip() == "eval(param)")
+    f = _finding(line, cwe="CWE-95", file=FLOW)
+    assert not slicer.build(f, str(FIX), 2).helpers
+    ctx = slicer.build(f, str(FIX), 2, helper_dirs=[str(FIX / "helpers")])
+    assert any("return \"constant\"" in t for _, _, t in ctx.helpers)
+    ret = next(n for _, n, t in ctx.helpers if "return" in t)
+    v = Verdict(verdict="likely_false_positive", confidence_score=0.9,
+                evidence=[Evidence(file="helpers/wrapper.py", lines=str(ret))])
+    assert verifier.check(v, ctx)[1]         

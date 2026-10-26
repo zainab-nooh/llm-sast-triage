@@ -56,4 +56,11 @@ def import_alert(param):
     import xml.sax
     noise = "not used"
     parser = xml.sax.make_parser()
-    xml.sax.parseString(bar, parser)        
+    xml.sax.parseString(bar, parser)
+
+
+
+
+def helper_in_other_file(scr):
+    param = scr.get_safe_value("x")
+    eval(param)            

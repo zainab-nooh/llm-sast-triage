@@ -8,7 +8,7 @@ If the file cannot be parsed or no function encloses the line, fall back to a wi
 """
 import ast
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple
 
 from .models import Context, Finding
 
@@ -32,6 +32,25 @@ def enclosing_function(tree: ast.AST, line: int):
             if best is None or fn.lineno > best.lineno:
                 best = fn
     return best
+
+
+def function_key(finding: Finding, root: str) -> Optional[int]:
+    """Line where the function around the alert starts (None if there is none). Used to group alerts."""
+    try:
+        tree = ast.parse("\n".join(_read(root, finding.file)))
+    except (SyntaxError, OSError):
+        return None
+    fn = enclosing_function(tree, finding.start_line)
+    return fn.lineno if fn else None
+
+
+def merge(contexts: List[Context]) -> Context:
+    """One context holding the slices of several alerts in the same function."""
+    lines = sorted({n_t for c in contexts for n_t in c.lines})
+    notes = list(dict.fromkeys(c.note for c in contexts if c.note))
+    helpers = list(dict.fromkeys(h for c in contexts for h in c.helpers))
+    return Context(level=contexts[0].level, file=contexts[0].file, lines=lines, note=" ".join(notes), helpers=helpers)
+
 
 
 # Extracts all variable and argument names used inside a given code block or statement
@@ -169,13 +188,43 @@ def _helpers(tree: ast.AST, fn, wanted: Set[int]) -> Set[int]:
     return extra
 
 
+MAX_HELPER_LINES = 20
+
+
+def _cross_file_helpers(fn, wanted: Set[int], sink_line: int, helper_dirs: List[str]) -> List[Tuple[str, int, str]]:
+    """Bodies of short functions defined in other project files (helper_dirs) and called in the slice before the sink.
+
+    Example: param = scr.get_safe_value("x") calls helpers/separate_request.py, which returns a constant.
+    Matched by function or method name, so a name defined twice (two classes) shows both definitions."""
+    called = []
+    for s in _stmts(fn):
+        if s.lineno <= sink_line and s.lineno in wanted and not isinstance(s, (ast.If, ast.While, ast.For, ast.With, ast.Try)):
+            for call in [n for n in ast.walk(s) if isinstance(n, ast.Call)]:
+                name = call.func.id if isinstance(call.func, ast.Name) else getattr(call.func, "attr", None)
+                if name and name not in called:
+                    called.append(name)
+    out: List[Tuple[str, int, str]] = []
+    for d in helper_dirs:
+        for path in sorted(Path(d).rglob("*.py")):
+            text = path.read_text(errors="replace").splitlines()
+            try:
+                tree = ast.parse("\n".join(text))
+            except SyntaxError:
+                continue
+            rel = f"{Path(d).name}/{path.relative_to(d).as_posix()}"
+            for h in _functions(tree):
+                if h.name in called and (h.end_lineno - h.lineno) < MAX_HELPER_LINES:
+                    out += [(rel, n, text[n - 1]) for n in range(h.lineno, h.end_lineno + 1)]
+    return out
+
+
 def _window(lines: List[str], line: int) -> Set[int]:
     return set(range(max(1, line - WINDOW), min(len(lines), line + WINDOW) + 1))
 
 
-def build(finding: Finding, root: str, level: int = 2) -> Context:
+def build(finding: Finding, root: str, level: int = 2, helper_dirs: List[str] = ()) -> Context:
     lines = _read(root, finding.file)
-    note = ""
+    note, helpers = "", []
     try:
         tree = ast.parse("\n".join(lines))
     except SyntaxError:
@@ -207,7 +256,10 @@ def build(finding: Finding, root: str, level: int = 2) -> Context:
                 wanted = _slice_lines(fn, sink, trace_lines)
             if level >= 3:
                 wanted |= _helpers(tree, fn, wanted)
+            if helper_dirs:
+                helpers = _cross_file_helpers(fn, wanted, sink.end_lineno or sink.lineno, helper_dirs)
             if not finding.trace and not note:
                 note = "No scanner trace, slice built from the code structure."
     chosen = sorted(n for n in wanted if 1 <= n <= len(lines))
-    return Context(level=level, file=finding.file, lines=[(n, lines[n - 1]) for n in chosen], note=note)
+    return Context(level=level, file=finding.file, lines=[(n, lines[n - 1]) for n in chosen], note=note,
+                   helpers=helpers)

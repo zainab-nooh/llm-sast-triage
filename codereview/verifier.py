@@ -19,12 +19,13 @@ def check(verdict: Verdict, ctx: Context) -> Tuple[Verdict, bool, str]:
     """Return (possibly downgraded verdict, verified?, reason)."""
     if verdict.verdict == "uncertain":
         return verdict, True, "uncertain verdicts need no evidence"
-    shown = set(ctx.numbers())
+
     if not verdict.evidence:
         reason = "no evidence cited"
     else:
         reason = ""
         for ev in verdict.evidence:
+            shown = set(ctx.shown(ev.file))    # evidence may point at the code under review or at a helper file
             span = _parse_lines(ev.lines)
             if span is None or span[0] > span[1]:
                 reason = f"bad line reference: {ev.lines}"

@@ -43,6 +43,7 @@ class Context(BaseModel):
     file: str
     lines: List[Tuple[int, str]]   # (line number, text)
     note: str = ""
+    helpers: List[Tuple[str, int, str]] = Field(default_factory=list)  # (file, line, text) from other project files
 
     def numbers(self) -> List[int]:
         return [n for n, _ in self.lines]
@@ -54,6 +55,22 @@ class Context(BaseModel):
                 out.append("     | ...")
             out.append(f"{n:4d} | {text}")
             prev = n
+        return "\n".join(out)
+
+    def shown(self, file: str) -> List[int]:
+        """Line numbers shown for a file: the code under review, or a helper file (matched by file name)."""
+        name = file.replace("\\", "/").split("/")[-1]
+        if name == self.file.replace("\\", "/").split("/")[-1]:
+            return self.numbers()
+        return [n for f, n, _ in self.helpers if f.split("/")[-1] == name]
+
+    def render_helpers(self) -> str:
+        out, prev = [], None
+        for f, n, text in self.helpers:
+            if f != prev:
+                out.append(f"--- {f}")
+                prev = f
+            out.append(f"{n:4d} | {text}")
         return "\n".join(out)
 
 

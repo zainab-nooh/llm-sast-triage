@@ -16,3 +16,10 @@ examples:
 - code: defusedxml.ElementTree.fromstring(user_xml)
   verdict: likely_false_positive
   why: defusedxml blocks entity expansion.
+
+
+- code: |
+    parser = xml.sax.make_parser()
+    doc = xml.dom.minidom.parseString(user_xml, parser)
+  verdict: likely_false_positive
+  why: A default xml.sax parser does not resolve external entities (Python 3.7.1 and later) and nothing turns feature_external_ges on.

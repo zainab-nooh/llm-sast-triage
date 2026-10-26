@@ -40,6 +40,8 @@ class Config(BaseModel):
     context_level: int = 2          # 1 function, 2 source-to-sink slice + guards, 3 = 2 + helper functions
     threshold: float = 0.8          # fail-open: suppress only at or above this confidence
     votes: int = 1                  # majority voting (use 3 on final runs only)
+    helper_dirs: List[str] = Field(default_factory=list)  # other project folders to look up called helper functions in
+    group: bool = True              # judge all alerts with the same CWE in the same function once, together
     skip_judge: bool = False        # setup A: scanner only
     max_findings: Optional[int] = None   # cost control while developing
     rubrics_dir: str = str(ROOT / "rubrics")

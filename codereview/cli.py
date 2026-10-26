@@ -26,6 +26,8 @@ def run(target: str,
         context: int = typer.Option(2, help="1 function, 2 slice, 3 slice + helpers"),
         threshold: float = typer.Option(0.8),
         votes: int = typer.Option(1, help="3 for majority voting on final runs"),
+        helpers: List[str] = typer.Option(None, help="folder with helper code the target calls, e.g. data/benchmark-python/helpers"),
+        group: bool = typer.Option(True, help="judge alerts with the same CWE in one function together (--no-group to turn off)"),
         scanner_only: bool = typer.Option(False, help="Setup A: no model"),
         max_findings: Optional[int] = typer.Option(None),
         sarif: Optional[str] = typer.Option(None, help="use an existing Semgrep SARIF file"),
@@ -35,7 +37,7 @@ def run(target: str,
         effort: Optional[str] = typer.Option(None, help="Claude effort: low | medium | high"),
         only_scored: Optional[str] = typer.Option(None, help="benchmark truth file: judge only alerts it can score")):
     """Scan a folder, judge each alert, apply the fail-open gate, and store the results."""
-    cfg = Config(target=target, context_level=context, threshold=threshold, votes=votes, skip_judge=scanner_only,
+    cfg = Config(target=target, context_level=context, threshold=threshold, votes=votes, group=group, helper_dirs=helpers or [], skip_judge=scanner_only,
                  max_findings=max_findings, sarif_path=sarif, bandit_path=bandit_json, only_cwes=cwe or [],
                  only_scored=only_scored)
     if provider:

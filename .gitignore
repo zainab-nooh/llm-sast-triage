@@ -13,4 +13,7 @@ results-502-611-614.txt
 results-611-502.txt
 results-prototype.txt
 results-dev.txt
-results-dev-qwen.txtresults-*.txt
+results-dev-qwen.txt
+results-*.txt
+results-dev-qwen-2.txt
+results-*.txt

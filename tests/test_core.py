@@ -235,3 +235,15 @@ def test_slicer_shows_helper_functions_from_other_files():
     v = Verdict(verdict="likely_false_positive", confidence_score=0.9,
                 evidence=[Evidence(file="helpers/wrapper.py", lines=str(ret))])
     assert verifier.check(v, ctx)[1]         
+
+
+
+def test_model_failure_keeps_the_alert(monkeypatch):
+    """If the model call crashes (API down, local model out of memory), the alert is kept, and the run goes on."""
+    from codereview import llm
+
+    def boom(system, user, cfg):
+        raise ConnectionError("server error")
+    monkeypatch.setattr(llm, "complete", boom)
+    verdict, _ = llm.judge("s", "u", Config(provider="ollama"), "f1", [])
+    assert verdict.verdict == "uncertain" and gate.decide(verdict, True, 0.8).action == "keep"    

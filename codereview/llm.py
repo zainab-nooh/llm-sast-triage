@@ -114,7 +114,8 @@ def complete(system: str, user: str, cfg: Config) -> Tuple[str, int, int]:
         req = urllib.request.Request("http://localhost:11434/api/chat", method="POST",
                                      headers={"Content-Type": "application/json"},
                                      data=json.dumps({"model": cfg.model, "stream": False, "format": "json",
-                                                      "options": {"temperature": 0},
+                                                      "options": {"temperature": 0,
+                                                                  "num_ctx": int(os.getenv("CODEREVIEW_OLLAMA_CTX", 8192))},
                                                       "messages": [{"role": "system", "content": system},
                                                                    {"role": "user", "content": user}]}).encode())
         d = json.loads(urllib.request.urlopen(req, timeout=300).read())
@@ -126,7 +127,12 @@ def _one(system: str, user: str, cfg: Config, finding_id: str, raw_log: list) ->
     tin = tout = 0
     prompt = user
     for attempt in range(3):  # retry on invalid JSON
-        text, i, o = complete(system, prompt, cfg)
+        try:
+            text, i, o = complete(system, prompt, cfg)
+        except Exception as e:  # API down, timeout, model crash: fail open, keep the alert for a human
+            raw_log.append({"finding_id": finding_id, "attempt": attempt, "error": repr(e)[:300]})
+            return Verdict(finding_id=finding_id, verdict="uncertain", confidence_score=0.0,
+                           reasoning=f"The model call failed ({type(e).__name__}), so the alert is kept for a human."), tin, tout
         tin, tout = tin + i, tout + o
         raw_log.append({"finding_id": finding_id, "attempt": attempt, "reply": text})
         try:

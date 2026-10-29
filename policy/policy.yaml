@@ -1,7 +1,7 @@
 # A simulated organization security policy, based on public standards (OWASP Top 10:2025, CWE).
 # Replace or extend it with a real policy if your company or supervisor can share one.
 # Each rule: what is required (requirement) and which OWASP Top 10:2025 category and CWE it maps to.
-# OWASP categories checked against owasp.org/Top10/2025 on [date you checked].
+# OWASP categories checked against https://top10.owasp.org/2025/ on 29 Oct 2026.
 rules:
   - id: SEC-001
     title: No hard-coded credentials or secrets

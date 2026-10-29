@@ -20,3 +20,6 @@ results-*.txt
 results-dev-qwen14.txt
 results-dev-qwen3.txt
 results-dev-levels.txt
+
+results-dev-levels-v2.txt
+results-h2-haiku.txt

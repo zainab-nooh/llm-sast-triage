@@ -27,7 +27,8 @@ def for_cwe(cwe: Optional[str], policy_path: str, rubrics_dir: str) -> dict:
         return out
     pol = load_policy(policy_path).get(cwe)
     if pol:
-        out.update({"id": pol["id"], "title": pol["title"], "owasp": pol.get("owasp", "")})
+        out.update({"id": pol["id"], "title": pol["title"], "owasp": pol.get("owasp", ""),
+                "requirement": pol.get("requirement", "")})
     f = Path(rubrics_dir) / f"cwe_{cwe.replace('CWE-', '')}.yaml"
     if f.exists():
         r = yaml.safe_load(f.read_text())

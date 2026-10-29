@@ -53,7 +53,7 @@ def build(finding: Finding, ctx: Context, policy: dict, others: list = ()) -> tu
     examples = ""
     for i, ex in enumerate(policy.get("examples", [])[:3], 1):
         examples += f"\nExample {i}:\n{ex['code']}\n=> {ex['verdict']}: {ex['why']}\n"
-    user = f"""Policy rule: {policy.get('id')} - {policy.get('title')} ({policy.get('owasp', '')})
+    user = f"""Policy rule: {policy.get('id')} - {policy.get('title')} ({policy.get('owasp', '')}) {('Requirement: ' + policy['requirement']) if policy.get('requirement') else ''}
 Rubric for {finding.cwe or 'this alert'}:
 {rubric}
 {('Worked examples (not from the code under review):' + examples) if examples else ''}

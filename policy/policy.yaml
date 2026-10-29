@@ -1,16 +1,65 @@
 # A simulated organization security policy, based on public standards (OWASP Top 10:2025, CWE).
 # Replace or extend it with a real policy if your company or supervisor can share one.
-# OWASP categories checked against the tags in the Semgrep community rules (October 2026); confirm on owasp.org/Top10.
+# Each rule: what is required (requirement) and which OWASP Top 10:2025 category and CWE it maps to.
+# OWASP categories checked against owasp.org/Top10/2025 on [date you checked].
 rules:
-  - {id: SEC-001, title: No hard-coded credentials or secrets, cwe: CWE-798, owasp: "A07:2025 Authentication Failures"}
-  - {id: SEC-002, title: Database queries must be parameterized, cwe: CWE-89, owasp: "A05:2025 Injection"}
-  - {id: SEC-003, title: Do not run shell commands built from untrusted input, cwe: CWE-78, owasp: "A05:2025 Injection"}
-  - {id: SEC-004, title: File paths from users must be validated, cwe: CWE-22, owasp: "A01:2025 Broken Access Control"}
-  - {id: SEC-005, title: Output sent to browsers must be escaped, cwe: CWE-79, owasp: "A05:2025 Injection"}
-  - {id: SEC-006, title: No weak hashes or broken cryptography, cwe: CWE-327, owasp: "A04:2025 Cryptographic Failures"}
-  - {id: SEC-007, title: No unsafe deserialization of untrusted data, cwe: CWE-502, owasp: "A08:2025 Software or Data Integrity Failures"}
-  - {id: SEC-008, title: No eval or exec on untrusted input, cwe: CWE-95, owasp: "A05:2025 Injection"}
-  - {id: SEC-009, title: TLS certificate verification must not be disabled, cwe: CWE-295, owasp: "A07:2025 Authentication Failures"}
-  - {id: SEC-010, title: No sensitive data in logs, cwe: CWE-532, owasp: "A09:2025 Security Logging and Alerting Failures"}
-  - {id: SEC-011, title: XML parsers must not resolve external entities, cwe: CWE-611, owasp: "A02:2025 Security Misconfiguration"}
-  - {id: SEC-012, title: Session and sensitive cookies must use the Secure flag, cwe: CWE-614, owasp: "A02:2025 Security Misconfiguration"}
+  - id: SEC-001
+    title: No hard-coded credentials or secrets
+    requirement: Passwords, API keys and tokens must come from a secrets store or environment variables, never from source code.
+    cwe: CWE-798
+    owasp: "A07:2025 Authentication Failures"
+  - id: SEC-002
+    title: Database queries must be parameterized
+    requirement: Untrusted input must reach SQL only as a bound parameter (placeholders such as ? or %s). Building SQL text with f-strings, + or format() from untrusted input is not allowed, even after escaping.
+    cwe: CWE-89
+    owasp: "A05:2025 Injection"
+  - id: SEC-003
+    title: Do not run shell commands built from untrusted input
+    requirement: Commands must be run with a fixed program and an argument list (shell=False). Untrusted input must never be part of a command string passed to a shell.
+    cwe: CWE-78
+    owasp: "A05:2025 Injection"
+  - id: SEC-004
+    title: File paths from users must be validated
+    requirement: A path built from untrusted input must be resolved and checked to stay inside an allowed base folder before it is opened.
+    cwe: CWE-22
+    owasp: "A01:2025 Broken Access Control"
+  - id: SEC-005
+    title: Output sent to browsers must be escaped
+    requirement: Untrusted data placed in HTML must be escaped for its context, preferably by a template engine with auto-escaping turned on.
+    cwe: CWE-79
+    owasp: "A05:2025 Injection"
+  - id: SEC-006
+    title: No weak hashes or broken cryptography
+    requirement: Passwords must use a slow password hash (bcrypt, scrypt, Argon2 or PBKDF2); MD5, SHA-1 and DES must not protect security decisions.
+    cwe: CWE-327
+    owasp: "A04:2025 Cryptographic Failures"
+  - id: SEC-007
+    title: No unsafe deserialization of untrusted data
+    requirement: Untrusted data must never be passed to pickle, marshal or yaml.load with an unsafe loader. Use JSON or yaml.safe_load instead.
+    cwe: CWE-502
+    owasp: "A08:2025 Software or Data Integrity Failures"
+  - id: SEC-008
+    title: No eval or exec on untrusted input
+    requirement: Untrusted input must never reach eval, exec or compile. Use a parser such as ast.literal_eval or an explicit allow-list instead.
+    cwe: CWE-95
+    owasp: "A05:2025 Injection"
+  - id: SEC-009
+    title: TLS certificate verification must not be disabled
+    requirement: HTTPS clients must keep certificate verification on (no verify=False or unverified SSL contexts).
+    cwe: CWE-295
+    owasp: "A07:2025 Authentication Failures"
+  - id: SEC-010
+    title: No sensitive data in logs
+    requirement: Passwords, tokens and personal data must not be written to logs; mask them first.
+    cwe: CWE-532
+    owasp: "A09:2025 Security Logging and Alerting Failures"
+  - id: SEC-011
+    title: XML parsers must not resolve external entities
+    requirement: Untrusted XML must be parsed without resolving external entities. Turning entity or DTD resolution on (for example setFeature(feature_external_ges, True)) is not allowed; defusedxml is recommended.
+    cwe: CWE-611
+    owasp: "A02:2025 Security Misconfiguration"
+  - id: SEC-012
+    title: Session and sensitive cookies must use the Secure flag
+    requirement: Cookies that carry a session or sensitive data must be set with secure=True (and httponly=True), so they are only sent over HTTPS.
+    cwe: CWE-614
+    owasp: "A02:2025 Security Misconfiguration"

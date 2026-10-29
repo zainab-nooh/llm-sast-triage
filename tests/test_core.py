@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from codereview import evaluate as ev
-from codereview import gate, ingest, pipeline, prompts, slicer, store, verifier
+from codereview import gate, ingest, pipeline, prompts, report, slicer, store, verifier
 from codereview.config import Config
 from codereview.models import Context, Evidence, Finding, Verdict
 
@@ -246,4 +246,15 @@ def test_model_failure_keeps_the_alert(monkeypatch):
         raise ConnectionError("server error")
     monkeypatch.setattr(llm, "complete", boom)
     verdict, _ = llm.judge("s", "u", Config(provider="ollama"), "f1", [])
-    assert verdict.verdict == "uncertain" and gate.decide(verdict, True, 0.8).action == "keep"    
+    assert verdict.verdict == "uncertain" and gate.decide(verdict, True, 0.8).action == "keep"
+
+
+def test_report_escapes_untrusted_html(tmp_path):
+    cfg = Config(target=TARGET, provider="mock", runs_dir=str(tmp_path), sarif_path=str(FIX / "semgrep.sarif"),
+                 bandit_path=str(FIX / "bandit.json"))
+    run_id = pipeline.run(cfg)
+    con = store.connect(cfg.runs_dir)
+    con.execute("UPDATE results SET context = json_set(context, '$.lines[0][1]', '<b>XSS</b>')")
+    con.commit()
+    html = report.build(cfg.runs_dir, run_id).read_text(encoding="utf-8")
+    assert "<b>XSS</b>" not in html and "&lt;b&gt;XSS" in html

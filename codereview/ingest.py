@@ -15,6 +15,7 @@ CWE_RE = re.compile(r"CWE[-_ ]?(\d+)", re.I)
 BANDIT_CWE_FIX = {
     "B102": "CWE-95",   # exec used: Bandit says CWE-78 (OS command), it is code injection
     "B307": "CWE-95",   # eval used: same
+    "B201": "CWE-489",  # Flask debug=True: Bandit says CWE-94 (code injection), it is active debug code (a setting)
     "B506": "CWE-502",  # yaml.load: Bandit says CWE-20 (input validation), it is unsafe deserialization
     **{r: "CWE-611" for r in ("B313", "B314", "B315", "B316", "B317", "B318", "B319", "B320",
                                "B405", "B406", "B407", "B408", "B409", "B410", "B411")},  # XML parsing: Bandit says CWE-20

@@ -31,8 +31,13 @@ def run(cfg: Config) -> str:
             for g in group:
                 store.save(cfg, run_id, g, None, None, Decision(action="keep", reason="scanner only", verified=True), {})
             continue
-        ctx = slicer.merge([slicer.build(g, cfg.target, level=cfg.context_level, helper_dirs=cfg.helper_dirs) for g in group])  # 3. slice context
         pol = policy.for_cwe(f.cwe, cfg.policy_path, cfg.rubrics_dir)    # 4. rules for this CWE
+        if not pol["known"]:                                             # no rule to judge it by: keep it (fail-open)
+            for g in group:
+                store.save(cfg, run_id, g, None, None,
+                           Decision(action="keep", reason="no policy rule for this weakness type, kept for a human", verified=True), {})
+            continue
+        ctx = slicer.merge([slicer.build(g, cfg.target, level=cfg.context_level, helper_dirs=cfg.helper_dirs) for g in group])  # 3. slice context
         system, user = prompts.build(f, ctx, pol, others)                # 4. assemble prompt
         verdict, meta = llm.judge(system, user, cfg, f.id, raw_log)      # 5. AI judges
         verdict, verified, why = verifier.check(verdict, ctx)            # 6. verify evidence

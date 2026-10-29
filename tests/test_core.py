@@ -258,3 +258,16 @@ def test_report_escapes_untrusted_html(tmp_path):
     con.commit()
     html = report.build(cfg.runs_dir, run_id).read_text(encoding="utf-8")
     assert "<b>XSS</b>" not in html and "&lt;b&gt;XSS" in html
+
+
+def test_alert_without_a_policy_rule_is_kept_without_asking_the_model(tmp_path):
+    (tmp_path / "app.py").write_text("from flask import Flask\napp = Flask(__name__)\napp.run(debug=True)\n")
+    (tmp_path / "semgrep.sarif").write_text('{"runs": []}')
+    (tmp_path / "bandit.json").write_text(json.dumps({"results": [{
+        "filename": str(tmp_path / "app.py"), "line_number": 3, "line_range": [3], "test_id": "B201",
+        "issue_cwe": {"id": 94}, "issue_text": "Flask debug=True", "issue_severity": "HIGH"}]}))
+    cfg = Config(target=str(tmp_path), provider="mock", runs_dir=str(tmp_path / "runs"),
+                 sarif_path=str(tmp_path / "semgrep.sarif"), bandit_path=str(tmp_path / "bandit.json"))
+    rows = store.load_run(cfg.runs_dir, pipeline.run(cfg))
+    assert len(rows) == 1 and rows[0]["finding"]["cwe"] == "CWE-489"   # B201 is debug code, not code injection
+    assert rows[0]["verdict"] is None and rows[0]["decision"]["action"] == "keep"

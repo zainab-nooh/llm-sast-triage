@@ -6,6 +6,9 @@ rubric:
 - shell=True with any user-controlled part of the command string is unsafe.
 - Quoting with shlex.quote on every user value reduces risk but still needs review.
 - A command argument chosen from a fixed allow-list is safe.
+- If the program name or path itself is a variable (from configuration, settings, a database or a request),
+  the command is not fixed, even without a shell. Answer uncertain unless the code shows it is a constant or
+  chosen from an allow-list.
 examples:
 - code: subprocess.run(['ls', '-l'], check=True)
   verdict: likely_false_positive
@@ -13,3 +16,6 @@ examples:
 - code: subprocess.run('ping ' + host, shell=True)
   verdict: confirmed
   why: User data inside a shell command string.
+- code: subprocess.run([config.get('scanner', 'path'), filename])
+  verdict: uncertain
+  why: The program to run comes from configuration, which users may be able to change.

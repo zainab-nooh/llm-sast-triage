@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS results (
 CREATE TABLE IF NOT EXISTS reviews (
   run_id TEXT, finding_id TEXT, label TEXT, note TEXT, updated TEXT, PRIMARY KEY (run_id, finding_id)
 );
+CREATE TABLE IF NOT EXISTS run_status (run_id TEXT PRIMARY KEY, partial TEXT);
 """
 
 
@@ -73,10 +74,22 @@ def load_config(runs_dir: str, run_id: str) -> dict:
     return json.loads(row[0]) if row else {}
 
 
+def mark_partial(runs_dir: str, run_id: str, reason: str) -> None:
+    """A scan that stopped early (spending limit or cancel). Its unchecked alerts were kept; never use it for evaluation."""
+    con = connect(runs_dir)
+    con.execute("INSERT OR REPLACE INTO run_status VALUES (?,?)", (run_id, reason))
+    con.commit()
+
+
+def partial_reason(runs_dir: str, run_id: str) -> Optional[str]:
+    row = connect(runs_dir).execute("SELECT partial FROM run_status WHERE run_id=?", (run_id,)).fetchone()
+    return row[0] if row else None
+
+
 def save_review(runs_dir: str, run_id: str, finding_id: str, label: str, note: str = "") -> None:
     """A person's decision on one alert (from the GUI). Kept apart from the model's verdict, never mixed with it."""
     con = connect(runs_dir)
-    con.execute("INSERT OR REPLACE INTO reviews VALUES (?,?,?,?,?)",
+    con.execute("INSERT OR REPLACE INTO reviews (run_id, finding_id, label, note, updated) VALUES (?,?,?,?,?)",
                 (run_id, finding_id, label, note, datetime.now().isoformat(timespec="seconds")))
     con.commit()
 
@@ -90,6 +103,7 @@ def list_runs(runs_dir: str) -> List[dict]:
     """One summary row per run, newest first: settings, alert count, hidden count, cost and time."""
     con = connect(runs_dir)
     out = []
+    partial = dict(con.execute("SELECT run_id, partial FROM run_status").fetchall())
     for rid, created, conf in con.execute("SELECT id, created, config FROM runs ORDER BY created DESC").fetchall():
         c = json.loads(conf)
         n, hidden, cost, secs = con.execute(
@@ -98,7 +112,8 @@ def list_runs(runs_dir: str) -> List[dict]:
         out.append({"id": rid, "created": created[:16].replace("T", " "), "target": c.get("target", ""),
                     "provider": c.get("provider", ""), "model": "scanner only" if c.get("skip_judge") else c.get("model", ""),
                     "threshold": c.get("threshold"), "context_level": c.get("context_level"),
-                    "alerts": n, "hidden": hidden or 0, "cost": round(cost, 4), "seconds": round(secs, 1)})
+                    "alerts": n, "hidden": hidden or 0, "cost": round(cost, 4), "seconds": round(secs, 1),
+                    "benchmark": bool(c.get("only_scored")), "partial": partial.get(rid)})
     return out
 
 

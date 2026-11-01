@@ -22,3 +22,4 @@ data/real/
 security_tests/
 .patch-backup-webapp/
 .patch-backup-report/
+.patch-backup-extras/

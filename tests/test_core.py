@@ -409,3 +409,56 @@ def test_each_model_is_costed_at_its_own_price(monkeypatch):
     assert llm.price(Config(provider="anthropic", model="some-new-model")) == (0.10, 0.50)
     assert server.MODELS["claude"] == ("anthropic", "claude-haiku-5-5")      # Haiku stays the evaluated default
     assert server.MODELS["sonnet"] == ("anthropic", "claude-sonnet-5-5")
+
+
+def test_a_stopped_scan_keeps_every_unchecked_alert_and_is_marked_partial(tmp_path):
+    cfg = Config(target=TARGET, provider="mock", runs_dir=str(tmp_path), sarif_path=str(FIX / "semgrep.sarif"),
+                 bandit_path=str(FIX / "bandit.json"))
+    run_id = pipeline.run(cfg, should_stop=lambda spent: "spending limit of $0 reached")
+    rows = store.load_run(cfg.runs_dir, run_id)
+    assert rows and all(r["verdict"] is None and r["decision"]["action"] == "keep" for r in rows)   # fail-open
+    assert store.partial_reason(cfg.runs_dir, run_id).startswith("spending limit")
+    assert store.list_runs(cfg.runs_dir)[0]["partial"]
+    assert "Partial scan" in report.build(cfg.runs_dir, run_id).read_text(encoding="utf-8")
+
+
+def test_alerts_are_matched_across_scans_even_when_code_moves(tmp_path):
+    from codereview import server
+    client, run_id, h = _web(tmp_path)
+    rows = store.load_run(str(tmp_path), run_id)
+    seen = [r for r in rows if r["context"] and r["context"]["lines"]]
+    assert seen
+    moved = json.loads(json.dumps(seen))
+    for r in moved:                                     # the same code, five lines lower
+        r["finding"]["start_line"] += 5
+        r["finding"]["id"] += "-moved"
+        r["context"]["lines"] = [[n + 5, t] for n, t in r["context"]["lines"]]
+    assert sorted(server.fingerprints(seen).values()) == sorted(server.fingerprints(moved).values())
+    second = pipeline.run(Config(target=TARGET, provider="mock", runs_dir=str(tmp_path),
+                                 sarif_path=str(FIX / "semgrep.sarif"), bandit_path=str(FIX / "bandit.json")))
+    cmp = client.get(f"/api/compare?a={run_id}&b={second}", headers=h).json()
+    assert cmp["count"]["same"] == len(rows) and cmp["count"]["changed"] == 0 and not cmp["warnings"]
+    latest = client.get(f"/api/issues?run={second}", headers=h).json()
+    assert latest and not any(i["new"] for i in latest)              # nothing new since the first scan
+    assert all(i["new"] is None for i in client.get(f"/api/issues?run={run_id}", headers=h).json())   # first scan
+    assert client.get("/api/compare?a=../x&b=y", headers=h).status_code == 404
+
+
+def test_a_counted_scan_can_be_cancelled(tmp_path, monkeypatch):
+    from codereview import server
+    client, _, h = _web(tmp_path)
+    real_collect = server.pipeline.collect
+    monkeypatch.setattr(server.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(server.pipeline, "collect", lambda cfg, d: real_collect(
+        cfg.model_copy(update={"sarif_path": str(FIX / "semgrep.sarif"), "bandit_path": str(FIX / "bandit.json")}), d))
+    job = client.post("/api/scans", headers=h, json={"folder": TARGET, "cwes": list(server.CWES), "model": "mock", "max_cost": 0.5}).json()
+    import time
+    for _ in range(100):
+        job = client.get(f"/api/scans/{job['id']}", headers=h).json()
+        if job["state"] != "counting":
+            break
+        time.sleep(0.05)
+    assert job["state"] == "counted" and job["max_cost"] == 0.5
+    assert client.post(f"/api/scans/{job['id']}/cancel", headers=h).json()["state"] == "cancelled"
+    assert client.post(f"/api/scans/{job['id']}/start", headers=h).status_code == 409
+    assert client.post("/api/scans", headers=h, json={"folder": TARGET, "cwes": ["CWE-89"], "model": "mock", "max_cost": -1}).status_code == 422

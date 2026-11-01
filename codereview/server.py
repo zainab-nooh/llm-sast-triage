@@ -90,6 +90,7 @@ class ScanRequest(BaseModel):
     ref: str = Field(default="", max_length=100)          # GitHub only: branch, tag or commit (empty = default branch)
     cwes: List[str] = Field(min_length=1)
     model: str = "claude"
+    max_cost: Optional[float] = Field(default=None, ge=0, le=1000)   # spending limit in US$ (empty = no limit)
 
 
 class ReviewRequest(BaseModel):
@@ -109,7 +110,9 @@ class Jobs:
         self.judge_lock = threading.Lock()     # one AI run at a time: keeps cost and the database simple
 
     def public(self, job: dict) -> dict:
-        return {k: v for k, v in job.items() if k not in ("sarif", "bandit") and not k.startswith("_")}
+        out = {k: v for k, v in job.items() if k not in ("sarif", "bandit") and not k.startswith("_")}
+        out["cancelling"] = bool(job.get("_cancel"))
+        return out
 
     def update(self, jid: str, **kw) -> None:
         with self.lock:
@@ -148,7 +151,7 @@ class Jobs:
                "github": f"github.com/{gh[0]}/{gh[1]}" + (f" @ {gh[2]}" if gh[2] else "") if gh else None, "commit": None, "_gh": gh,
                "cwes": cwes, "model": req.model, "created": datetime.now().isoformat(timespec="seconds"),
                "alerts": None, "groups": None, "estimate": None, "done": 0, "total": 0, "current": "",
-               "run_id": None, "error": None}
+               "run_id": None, "error": None, "max_cost": req.max_cost or None, "spent": 0.0, "partial": None}
         with self.lock:
             self.jobs[jid] = job
             snapshot = self.public(job)            # copy now: the thread below starts changing the job at once
@@ -161,6 +164,9 @@ class Jobs:
             try:
                 owner, repo, ref = job["_gh"]
                 commit = clone_repo(owner, repo, ref, Path(job["folder"]))
+                if self.get(jid).get("_cancel"):
+                    self.update(jid, state="cancelled")
+                    return
                 self.update(jid, state="counting", commit=commit)
             except Exception as e:
                 traceback.print_exc()
@@ -183,6 +189,9 @@ class Jobs:
                 per_call, estimate = 0.0, 0.0
             warnings = [f"{name} produced no results file, so its alerts are missing. Check the terminal for its error."
                         for name, out in (("Semgrep", sarif), ("Bandit", bandit)) if not out]
+            if self.get(jid).get("_cancel"):
+                self.update(jid, state="cancelled")
+                return
             self.update(jid, state="counted", alerts=alerts, groups=n_groups, estimate=estimate, warnings=warnings,
                         per_call=round(per_call, 5), sarif=str(sarif) if sarif else None,
                         bandit=str(bandit) if bandit else None)
@@ -201,6 +210,9 @@ class Jobs:
     def _judge(self, jid: str) -> None:
         with self.judge_lock:
             job = self.get(jid)
+            if job.get("_cancel"):                 # cancelled while waiting for another scan
+                self.update(jid, state="cancelled")
+                return
             provider, model = MODELS[job["model"]]
             cfg = Config(target=job["folder"], provider=provider, model=model, context_level=CONTEXT_LEVEL,
                          threshold=THRESHOLD, only_cwes=job["cwes"], sarif_path=job["sarif"],
@@ -210,17 +222,37 @@ class Jobs:
             def progress(done, total, finding):
                 self.update(jid, done=done, total=total, current=f"{Path(finding.file).name}:{finding.start_line}")
 
+            def should_stop(spent: float) -> Optional[str]:
+                now = self.get(jid)
+                self.update(jid, spent=round(spent, 4))
+                if now.get("_cancel"):
+                    return "you cancelled the scan"
+                limit = now.get("max_cost")
+                if limit is not None and spent + (now.get("per_call") or 0) > limit:   # stop before going over
+                    return f"spending limit of ${limit:g} reached"
+                return None
+
             try:
-                run_id = pipeline.run(cfg, progress=progress)
+                run_id = pipeline.run(cfg, progress=progress, should_stop=should_stop)
                 report.build(self.runs_dir, run_id)
-                self.update(jid, state="done", run_id=run_id, done=job["groups"])
+                self.update(jid, state="done", run_id=run_id, done=job["groups"],
+                            partial=store.partial_reason(self.runs_dir, run_id))
             except Exception as e:
                 traceback.print_exc()
                 self.update(jid, state="error", error=f"The AI check stopped: {type(e).__name__}: {str(e)[:300]}")
 
+    def cancel(self, jid: str) -> dict:
+        job = self.get(jid)
+        if job["state"] in ("done", "error", "cancelled"):
+            raise HTTPException(409, "This scan has already finished.")
+        self.update(jid, _cancel=True)
+        if job["state"] == "counted":          # nothing running yet: stop at once
+            self.update(jid, state="cancelled")
+        return self.public(self.get(jid))
+
     def active(self) -> list:
         with self.lock:
-            return [self.public(j) for j in self.jobs.values() if j["state"] not in ("done", "error")]
+            return [self.public(j) for j in self.jobs.values() if j["state"] not in ("done", "error", "cancelled")]
 
 
 GITHUB = re.compile(r"^https://github\.com/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100}?)(?:\.git)?(?:/tree/([A-Za-z0-9._/-]{1,100}))?/?$")
@@ -301,14 +333,99 @@ def latest_runs(runs_dir: str) -> List[dict]:
     return out
 
 
+def _line_text(target: str, file: str, line: int, cache: dict) -> str:
+    """The flagged line's code from disk, for alerts the AI never saw (scanner only, or not checked)."""
+    if file not in cache:
+        try:
+            cache[file] = (Path(target) / file).read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            cache[file] = []
+    lines = cache[file]
+    return lines[line - 1] if 0 < line <= len(lines) else ""
+
+
+def fingerprints(rows: List[dict], target: str = "") -> dict:
+    """finding id -> a key that survives code moving up or down: scanner rule + file + the flagged line's code,
+    plus a counter when the same code repeats in a file. Line numbers are not part of the key."""
+    cache: dict = {}
+    keyed = []
+    for r in rows:
+        f, ctx = r["finding"], r["context"] or {}
+        text = next((t for n, t in ctx.get("lines", []) if n == f["start_line"]), None)
+        if text is None and target:
+            text = _line_text(target, f["file"], f["start_line"], cache)
+        base = "|".join([f["tool"], f["rule_id"].split(".")[-1], f["file"].replace("\\", "/"), " ".join((text or "").split())])
+        keyed.append((base, f["start_line"], f["id"]))
+    out, seen = {}, {}
+    for base, _, fid in sorted(keyed):
+        k = seen.get(base, 0)
+        seen[base] = k + 1
+        out[fid] = f"{base}|{k}"
+    return out
+
+
+def previous_run(runs_dir: str, run_id: str) -> Optional[str]:
+    """The scan of the same folder just before this one (complete scans only)."""
+    runs = store.list_runs(runs_dir)                     # newest first
+    ids = [r["id"] for r in runs]
+    if run_id not in ids:
+        return None
+    target = runs[ids.index(run_id)]["target"]
+    for r in runs[ids.index(run_id) + 1:]:
+        if r["target"] == target and not r["partial"]:
+            return r["id"]
+    return None
+
+
 def issues_for(runs_dir: str, run_ids: List[str]) -> List[dict]:
     out = []
     for rid in run_ids:
         cfg = store.load_config(runs_dir, rid)
-        project = project_name(cfg.get("target", ""))
+        target = cfg.get("target", "")
+        project = project_name(target)
         reviews = store.load_reviews(runs_dir, rid)
-        out += [to_issue(rid, project, row, reviews.get(row["finding"]["id"])) for row in store.load_run(runs_dir, rid)]
+        rows = store.load_run(runs_dir, rid)
+        prev = previous_run(runs_dir, rid)
+        keys = fingerprints(rows, target) if prev else {}
+        old = set(fingerprints(store.load_run(runs_dir, prev), target).values()) if prev else set()
+        for row in rows:
+            i = to_issue(rid, project, row, reviews.get(row["finding"]["id"]))
+            i["new"] = (keys[row["finding"]["id"]] not in old) if prev else None   # None: first scan of this folder
+            out.append(i)
     return out
+
+
+def compare_runs(runs_dir: str, a: str, b: str) -> dict:
+    """Which alerts changed AI result between two scans. Alerts are matched by fingerprint, not by line number."""
+    ca, cb = store.load_config(runs_dir, a), store.load_config(runs_dir, b)
+    ra, rb = store.load_run(runs_dir, a), store.load_run(runs_dir, b)
+    ka, kb = fingerprints(ra, ca.get("target", "")), fingerprints(rb, cb.get("target", ""))
+    ia = {ka[r["finding"]["id"]]: to_issue(a, "", r, None) for r in ra}
+    ib = {kb[r["finding"]["id"]]: to_issue(b, "", r, None) for r in rb}
+    rows = []
+    for key in sorted(set(ia) | set(ib), key=lambda k: ((ib.get(k) or ia.get(k))["file"], (ib.get(k) or ia.get(k))["line"])):
+        x, y = ia.get(key), ib.get(key)
+        z = y or x
+        side = lambda i: {"group": i["group"], "verdict": i["verdict"], "conf": i["conf"], "reason": i["reason"],
+                          "line": i["line"], "fid": i["fid"]} if i else None
+        rows.append({"file": z["file"], "cwe": z["cwe"], "sev": z["sev"], "rule": z["rule"], "tool": z["tool"],
+                     "a": side(x), "b": side(y),
+                     "change": "only_a" if not y else "only_b" if not x else "same" if x["group"] == y["group"] else "changed"})
+    count = {k: sum(r["change"] == k for r in rows) for k in ("same", "changed", "only_a", "only_b")}
+    warnings = []
+    if ca.get("target") != cb.get("target"):
+        warnings.append("These scans are of different folders, so most alerts will not match.")
+    elif count["only_a"] or count["only_b"]:
+        warnings.append("Some alerts exist in only one scan. If the code changed between the scans, "
+                        "differences can come from the code and not from the model.")
+    for rid in (a, b):
+        why = store.partial_reason(runs_dir, rid)
+        if why:
+            warnings.append(f"Scan {rid} stopped early ({why}), so some of its alerts were not checked.")
+    summary = lambda rid, c, rows_: {"id": rid, "project": project_name(c.get("target", "")), "model": c.get("model"),
+                                     "provider": c.get("provider"), "alerts": len(rows_),
+                                     "hidden": sum(r["decision"]["action"] == "suppress" for r in rows_)}
+    return {"a": summary(a, ca, ra), "b": summary(b, cb, rb), "rows": rows, "count": count, "warnings": warnings}
 
 
 def sarif_for(issues: List[dict]) -> dict:
@@ -396,6 +513,11 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
             raise HTTPException(400, "Unknown label")
         store.save_review(runs_dir, req.run, req.fid, req.label, req.note)
         return {"ok": True}
+    @app.get("/api/compare")
+    def compare(a: str, b: str):
+        _check_run(a)
+        _check_run(b)
+        return compare_runs(runs_dir, a, b)
 
     @app.get("/api/scans")
     def scans():
@@ -412,6 +534,10 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
     @app.post("/api/scans/{jid}/start")
     def start(jid: str):
         return jobs.start(jid)
+
+    @app.post("/api/scans/{jid}/cancel")
+    def cancel(jid: str):
+        return jobs.cancel(jid)
 
     @app.get("/api/runs/{run_id}/export.csv")
     def export_csv(run_id: str):

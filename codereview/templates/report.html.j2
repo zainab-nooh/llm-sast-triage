@@ -93,6 +93,7 @@ pre .ln.cite{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
 .legend .h::before{background:var(--code-hl);box-shadow:inset 3px 0 0 var(--crit)} .legend .c::before{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
 .msg{font-size:12.5px;color:var(--muted)}
 .empty{color:var(--muted);font-size:13px;padding:8px 0}
+.partial{margin-top:20px;border:1px solid var(--warn);background:var(--warn-soft);padding:10px 14px;font-size:13px}
 .note{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);display:grid;gap:6px}
 @media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{border-bottom:1px solid var(--line)}.facts{grid-template-columns:minmax(0,1fr)}
   details.issue>summary{grid-template-columns:minmax(0,1fr)}.sub{grid-column:auto}}
@@ -124,6 +125,7 @@ pre .ln.cite{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
   {% if config.target %}<span>Folder <b>{{ config.target }}</b></span>{% endif %}
 </div>
 
+{% if partial %}<div class="partial"><b>Partial scan.</b> The AI check stopped early because {{ partial }}. Alerts it did not reach are listed under "Not checked by the AI" and were kept, never hidden. Do not use this run for evaluation.</div>{% endif %}
 <div class="kpis">
   <div class="kpi"><span class="label">Alerts</span><span class="value">{{ total }}</span><span class="foot">from Semgrep and Bandit</span></div>
   <div class="kpi crit"><span class="label">Confirmed</span><span class="value">{{ groups.confirmed|length }}</span><span class="foot">fix first</span></div>

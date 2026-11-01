@@ -32,7 +32,7 @@ const SEV_ORDER = {critical:0, high:1, medium:2, low:3};
 const GROUP_ORDER = {Confirmed:0, 'Needs review':1, Hidden:2};
 const STATUS_PILL = {Confirmed:{cls:'confirmed', label:'Confirmed by AI'}, 'Needs review':{cls:'review', label:'Needs review'}, Hidden:{cls:'ignored', label:'Auto-ignored'}};
 const MODEL_NAMES = {'claude-haiku-5-5':'Claude Haiku 5.5', 'claude-sonnet-5-5':'Claude Sonnet 5.5', 'qwen3:14b':'Qwen3 14B (local)', 'mock':'Demo model', 'scanner only':'Scanner only'};
-const state = {status:'open', sev:'all', project:'all', cwe:'all', q:'', page:0, sel:null, run:null};
+const state = {status:'open', sev:'all', project:'all', cwe:'all', q:'', page:0, sel:null, run:null, cmp:{a:'',b:''}, cmpShow:'changed'};
 
 async function load(){
   const runParam = state.run ? '?run=' + encodeURIComponent(state.run) : '';
@@ -90,7 +90,7 @@ function viewDashboard(){
   const reviewed=ISSUES.filter(reviewOf).length;
   const kpi=(label,value,foot)=>el('div',{class:'panel kpi'},el('div',{class:'label',text:label}),el('div',{class:'value',text:value}),el('div',{class:'foot'},...foot));
   v.append(el('div',{class:'kpis'},
-    kpi('Open issues',open.length,[`${crit.length} critical · ${open.length-crit.length} other`]),
+    kpi('Open issues',open.length,[`${crit.length} critical · ${open.length-crit.length} other`+(ISSUES.some(i=>i.new)?` · ${open.filter(i=>i.new).length} new`:'')]),
     kpi('Needs your review',ISSUES.filter(needsReview).length,['The AI was not sure, so a person decides']),
     kpi('Noise removed by AI',ISSUES.length?Math.round(hidden.length/ISSUES.length*100)+'%':'0%',[`${hidden.length} of ${ISSUES.length} alerts auto-ignored in ${projects.length} project${projects.length===1?'':'s'}`]),
     kpi('Your decisions',reviewed,[`of ${ISSUES.length} alerts have a decision from you`])));
@@ -148,6 +148,7 @@ function filtered(){
   const q=state.q.trim().toLowerCase();
   return ISSUES.filter(i=>{
     if(state.status==='open'&&!isOpen(i)) return false;
+    if(state.status==='new'&&!i.new) return false;
     if(state.status==='review'&&!needsReview(i)) return false;
     if(state.status==='ignored'&&i.group!=='Hidden') return false;
     if(state.sev!=='all'&&i.sev!==state.sev) return false;
@@ -168,7 +169,7 @@ function viewIssues(){
   if(!ISSUES.length && !state.run){ emptyState(v); return; }
   const b=runBanner(); if(b) v.append(b);
   const cnt=f=>ISSUES.filter(f).length;
-  const chips=[['open','Open',cnt(isOpen)],['review','Needs review',cnt(needsReview)],['ignored','Auto-ignored',cnt(i=>i.group==='Hidden')],['all','All',ISSUES.length]];
+  const chips=[['open','Open',cnt(isOpen)],['new','New since last scan',cnt(i=>i.new)],['review','Needs review',cnt(needsReview)],['ignored','Auto-ignored',cnt(i=>i.group==='Hidden')],['all','All',ISSUES.length]];
   const bar=el('div',{class:'filters'});
   chips.forEach(([k,l,n])=>bar.append(el('button',{type:'button',class:'chip'+(state.status===k?' on':''),onclick:()=>{state.status=k;state.page=0;viewIssues();}},l,el('span',{class:'n',text:n}))));
   bar.append(el('span',{style:'flex:1'}));
@@ -181,7 +182,7 @@ function viewIssues(){
   rows.slice(state.page*per,(state.page+1)*per).forEach(i=>{
     tbody.append(el('tr',{class:state.sel===i.id?'sel':'',tabindex:0,onclick:()=>openIssue(i.id),onkeydown:e=>{if(e.key==='Enter')openIssue(i.id)}},
       el('td',{},sevBadge(i.sev)),
-      el('td',{},el('div',{class:'title-cell'},el('b',{text:i.title}),el('span',{text:`${i.file}:${i.line}`}))),
+      el('td',{},el('div',{class:'title-cell'},el('b',{},i.title,i.new?el('span',{class:'tag new',text:'New'}):null),el('span',{text:`${i.file}:${i.line}`}))),
       el('td',{},el('span',{class:'tag',text:i.cwe})),
       el('td',{text:i.project}),
       el('td',{},statusPill(i)),
@@ -303,23 +304,26 @@ function viewScans(){
       el('div',{style:'min-width:0'},el('div',{class:'t',text:j.project}),el('div',{class:'s',text:j.state==='judging'?`${j.done} of ${j.total} groups · ${j.current}`:j.folder})))));
     v.append(panel('Running now',null,list)); }
   const t=el('tbody');
-  RUNS.forEach(r=>t.append(el('tr',{},el('td',{},el('span',{class:'tag',text:r.id})),el('td',{title:r.target,text:r.project}),el('td',{text:MODEL_NAMES[r.model]||r.model}),
+  RUNS.forEach(r=>t.append(el('tr',{},el('td',{},el('span',{class:'tag',text:r.id}),r.partial?el('span',{class:'tag part',title:r.partial,text:'partial'}):null),el('td',{title:r.target,text:r.project}),el('td',{text:MODEL_NAMES[r.model]||r.model}),
     el('td',{text:r.alerts}),el('td',{text:r.hidden}),el('td',{text:money(r.cost)}),el('td',{text:mins(r.seconds)}),
     el('td',{},el('div',{class:'row-actions'},
       el('button',{class:'btn small',type:'button',onclick:async()=>{state.run=r.id;state.project='all';state.status='all';state.page=0;await refresh('issues');}},'Open'),
       el('button',{class:'btn small',type:'button',onclick:()=>download(`/api/runs/${r.id}/report.html`)},'Report'),
       el('button',{class:'btn small',type:'button',onclick:()=>download(`/api/runs/${r.id}/export.csv`)},'CSV'),
-      el('button',{class:'btn small',type:'button',onclick:()=>download(`/api/runs/${r.id}/export.sarif`)},'SARIF'))))));
+      el('button',{class:'btn small',type:'button',onclick:()=>download(`/api/runs/${r.id}/export.sarif`)},'SARIF'),
+      el('button',{class:'btn small',type:'button',onclick:()=>{ const prev=RUNS.find(x=>x.target===r.target&&x.created<r.created); state.cmp={a:prev?prev.id:'',b:r.id}; location.hash='#compare'; }},'Compare'))))));
   v.append(panel('Scan history','scans from this app and from the command line',
     RUNS.length?el('div',{class:'table-wrap'},el('table',{},el('thead',{},el('tr',{},...['Run','Project','Model','Alerts','Auto-ignored','Cost','Time',''].map(h=>el('th',{text:h})))),t)):el('div',{class:'empty',text:'No scans yet.'}),
     el('button',{class:'btn small primary',type:'button',onclick:()=>openScan('')},'New scan')));
 }
-function jobLabel(j){ return {cloning:'Downloading',counting:'Scanning',counted:'Waiting for you',queued:'Queued',judging:'AI checking'}[j.state]||j.state; }
+function jobLabel(j){ return {cloning:'Downloading',counting:'Scanning',counted:'Waiting for you',queued:'Queued',judging:'AI checking',cancelled:'Cancelled'}[j.state]||j.state; }
 
 let pollTimer=null;
 function openScan(path, jobId){
   const layer=$('#layer'); layer.replaceChildren(); clearTimeout(pollTimer);
-  let model=STATUS.anthropic_key?'claude':'mock', job=null, busy=false;
+  let model=STATUS.anthropic_key?'claude':'mock', job=null, busy=false, limit='';
+  const paid=()=>model==='claude'||model==='sonnet';
+  const cancelJob=async()=>{ try{ job=await api(`/api/scans/${job.id}/cancel`,{method:'POST'}); render(); if(job.state!=='cancelled') poll(); }catch(e){ if(e.message!=='no token') toast(e.message); } };
   const close=()=>{ clearTimeout(pollTimer); layer.replaceChildren(); };
   const card=el('div',{class:'modal-card',role:'dialog','aria-label':'New scan'}); layer.append(el('div',{class:'modal',onclick:e=>{if(e.target===e.currentTarget)close();}},card));
   const folder=el('input',{class:'input',id:'folder',placeholder:'https://github.com/owner/repo  or  C:\\Users\\you\\my-app',autocomplete:'off'}); folder.value=path||'';
@@ -342,44 +346,91 @@ function openScan(path, jobId){
         el('div',{class:'field'},el('label',{for:'folder',text:'GitHub link or folder'}),folder,el('div',{class:'hint',text:'A public GitHub repository is downloaded to runs/app-repos on this computer (code is only read, never run). Only the small code slice for each alert is sent to the model you pick.'})),
         el('div',{class:'field'},el('label',{for:'ref',text:'Branch, tag or commit (GitHub only, optional)'}),ref),
         el('div',{class:'field'},el('div',{class:'lab',text:'Model'}),models),
+        paid()?el('div',{class:'field'},el('label',{for:'limit',text:'Spending limit for this scan (US$, optional)'}),
+          el('input',{class:'input',id:'limit',type:'number',min:0,step:'0.01',inputmode:'decimal',placeholder:'no limit',value:limit,oninput:e=>{limit=e.target.value;}}),
+          el('div',{class:'hint',text:'The AI check stops before it would go over this amount. Alerts it did not reach are kept for you, never hidden.'})):null,
         el('div',{class:'field'},el('div',{class:'lab',text:'Weakness types'}),checks),
         el('div',{class:'locked'},el('span',{class:'tag',text:'locked'}),`Context level ${STATUS.context_level} and threshold ${STATUS.threshold}, the settings measured in the evaluation.`)),
         el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Cancel'),el('button',{class:'btn primary',type:'button',disabled:busy||missing.length>0,onclick:async()=>{
           if(!folder.value.trim()){toast('Type a folder first');return;} if(!chosen.size){toast('Pick at least one weakness type');return;}
           busy=true; render();
-          try{ job=await api('/api/scans',{method:'POST',body:{folder:folder.value.trim(),ref:ref.value.trim(),cwes:[...chosen],model}}); path=folder.value; render(); poll(); }
+          const lim=paid()&&limit!==''?Number(limit):null; if(lim!==null&&!(lim>=0)){toast('The spending limit must be a positive number');busy=false;render();return;}
+          try{ job=await api('/api/scans',{method:'POST',body:{folder:folder.value.trim(),ref:ref.value.trim(),cwes:[...chosen],model,max_cost:lim}}); path=folder.value; render(); poll(); }
           catch(e){ busy=false; render(); if(e.message!=='no token') toast(e.message); } }},busy?'Starting…':'Scan and estimate')));
       setTimeout(()=>folder.focus(),30);
     } else if(job.state==='cloning'){
       card.append(el('div',{class:'form'},el('div',{text:`Downloading ${job.github} from GitHub…`}),el('div',{class:'prog indet'},el('span',{})),
         el('div',{style:'color:var(--muted);font-size:12.5px',text:'Only the chosen version is downloaded, without its history. The code is read by the scanners, never run.'})),
-        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Run in background')));
+        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:cancelJob},'Cancel scan'),el('button',{class:'btn',type:'button',onclick:close},'Run in background')));
     } else if(job.state==='counting'){
       card.append(el('div',{class:'form'},el('div',{text:'Semgrep and Bandit are reading the code…'}),el('div',{class:'prog indet'},el('span',{})),
-        el('div',{style:'color:var(--muted);font-size:12.5px',text:'A large project can take a few minutes. No AI is used in this step, so it is free.'})),
-        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Run in background')));
+        el('div',{style:'color:var(--muted);font-size:12.5px',text:job.cancelling?'Cancelling: the scanners finish their current pass first.':'A large project can take a few minutes. No AI is used in this step, so it is free.'})),
+        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:cancelJob},'Cancel scan'),el('button',{class:'btn',type:'button',onclick:close},'Run in background')));
     } else if(job.state==='counted'){
       (job.warnings||[]).forEach(w=>card.append(el('div',{class:'preview-note',style:'background:var(--crit-soft);margin:16px 22px 0'},el('b',{text:'Warning. '}),w)));
       if(!job.alerts){ card.append(el('div',{class:'form'},el('div',{class:'estimate'},el('b',{text:'No alerts of these types.'}),el('div',{text:'The scanners found nothing to check, so no AI is needed.'}))),
         el('div',{class:'modal-f'},el('button',{class:'btn primary',type:'button',onclick:close},'Close'))); return; }
       card.append(el('div',{class:'form'},el('div',{class:'estimate'},el('div',{},el('b',{text:`${job.alerts} alerts`}),' found by Semgrep and Bandit in ',el('span',{class:'tag',text:job.project}),job.commit?el('span',{class:'tag',text:'commit '+job.commit}):null),
         el('div',{text:`They form ${job.groups} groups, because alerts with the same weakness in the same function are checked together.`}),
-        el('div',{},'Estimated cost: ',el('b',{text:job.estimate?'about '+money(job.estimate):'$0'}),job.estimate?` (${money(job.per_call)} per check, from your earlier runs)`:' (no paid API)'))),
-        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Cancel'),el('button',{class:'btn primary',type:'button',onclick:async()=>{
+        el('div',{},'Estimated cost: ',el('b',{text:job.estimate?'about '+money(job.estimate):'$0'}),job.estimate?` (${money(job.per_call)} per check, from your earlier runs)`:' (no paid API)'),
+        job.max_cost!=null?el('div',{},'Spending limit: ',el('b',{text:money(job.max_cost)||'$0'}),job.estimate>job.max_cost?el('span',{style:'color:var(--warn)',text:` · the estimate is above your limit, so about ${Math.floor(job.max_cost/(job.per_call||1))} of ${job.groups} groups will be checked and the rest kept for you`}):null):null)),
+        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:async()=>{ await cancelJob(); close(); }},'Cancel'),el('button',{class:'btn primary',type:'button',onclick:async()=>{
           try{ job=await api(`/api/scans/${job.id}/start`,{method:'POST'}); render(); poll(); }catch(e){ if(e.message!=='no token') toast(e.message); } }},'Start AI triage')));
     } else if(job.state==='queued'||job.state==='judging'){
       const pct=job.total?Math.round(job.done/job.total*100):0;
       card.append(el('div',{class:'form'},el('div',{text:job.state==='queued'?'Waiting for another scan to finish…':`Checking group ${job.done+1} of ${job.total} · ${job.current}`}),el('div',{class:'prog'},el('span',{style:`width:${pct}%`})),
-        el('div',{style:'color:var(--muted);font-size:12.5px',text:'You can close this window. The scan keeps running and appears under Scans.'})),
-        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Run in background')));
+        job.spent?el('div',{style:'font-size:12.5px',text:`Spent so far: ${money(job.spent)}`+(job.max_cost!=null?` of your ${money(job.max_cost)||'$0'} limit`:'')}):null,
+        el('div',{style:'color:var(--muted);font-size:12.5px',text:job.cancelling?'Stopping after the current check…':'You can close this window. The scan keeps running and appears under Scans.'})),
+        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',disabled:!!job.cancelling,onclick:cancelJob},'Stop scan'),el('button',{class:'btn',type:'button',onclick:close},'Run in background')));
     } else if(job.state==='done'){
-      card.append(el('div',{class:'form'},el('div',{class:'estimate'},el('b',{text:'Done.'}),el('div',{text:`${job.alerts} alerts checked in ${job.project}.`}))),
+      card.append(el('div',{class:'form'},el('div',{class:'estimate'},el('b',{text:job.partial?'Stopped early.':'Done.'}),
+          el('div',{text:job.partial?`The AI check stopped because ${job.partial}. Alerts it did not reach are kept as "not checked" for you, and this scan is marked partial.`:`${job.alerts} alerts checked in ${job.project}.`}))),
         el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Close'),el('button',{class:'btn primary',type:'button',onclick:async()=>{ close(); state.run=null; state.project=job.project; state.status='open'; state.page=0; await refresh('issues'); }},'See the issues')));
+    } else if(job.state==='cancelled'){
+      card.append(el('div',{class:'form'},el('div',{class:'estimate'},el('b',{text:'Scan cancelled.'}),el('div',{text:'No AI check was run, so nothing was spent and no results were saved.'}))),
+        el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Close')));
     } else {
       card.append(el('div',{class:'form'},el('div',{class:'preview-note',style:'background:var(--crit-soft)'},el('b',{text:'The scan stopped. '}),job.error||'')),
         el('div',{class:'modal-f'},el('button',{class:'btn',type:'button',onclick:close},'Close')));
     }};
   if(jobId){ job={id:jobId,state:'counting',github:''}; poll(); } else render();
+}
+
+
+/* ---------------- Compare two scans ---------------- */
+async function viewCompare(){
+  setTitle('Workspace','Compare scans');
+  const v=$('#view'); v.replaceChildren();
+  const judged=RUNS.filter(r=>r.model!=='scanner only');
+  if(judged.length<2){ v.append(panel('Compare scans',null,el('div',{class:'empty',text:'You need at least two scans to compare. Scan the same project twice, for example with two models.'}))); return; }
+  if(!state.cmp.b){ const b=judged[0]; const a=judged.find(r=>r.target===b.target&&r.id!==b.id)||judged[1]; state.cmp={a:a.id,b:b.id}; }
+  const label=r=>`${r.project} · ${MODEL_NAMES[r.model]||r.model} · ${r.created}${r.partial?' · partial':''}`;
+  const pick=(key,text)=>{ const s=el('select',{class:'sel','aria-label':text,onchange:e=>{state.cmp[key]=e.target.value;viewCompare();}});
+    judged.forEach(r=>{ const o=el('option',{value:r.id,text:label(r)}); if(state.cmp[key]===r.id) o.selected=true; s.append(o); }); return s; };
+  v.append(el('div',{class:'panel'},el('div',{class:'filters cmp-pick'},el('span',{class:'lab',text:'Before (A)'}),pick('a','Scan A'),el('span',{class:'lab',text:'After (B)'}),pick('b','Scan B'))));
+  if(state.cmp.a===state.cmp.b){ v.append(el('div',{class:'empty',text:'Pick two different scans.'})); return; }
+  const out=el('div',{style:'display:grid;gap:20px'},el('div',{class:'empty',text:'Comparing…'})); v.append(out);
+  let c; try{ c=await api(`/api/compare?a=${encodeURIComponent(state.cmp.a)}&b=${encodeURIComponent(state.cmp.b)}`); }catch(e){ out.replaceChildren(el('div',{class:'empty',text:e.message})); return; }
+  out.replaceChildren();
+  c.warnings.forEach(w=>out.append(el('div',{class:'preview-note',style:'background:var(--warn-soft)'},el('b',{text:'Note. '}),w)));
+  const side=(x,t)=>el('div',{class:'panel kpi'},el('div',{class:'label',text:t}),el('div',{class:'value',text:`${x.hidden} / ${x.alerts}`}),el('div',{class:'foot',text:`hidden / alerts · ${MODEL_NAMES[x.model]||x.model} · ${x.project}`}));
+  out.append(el('div',{class:'kpis'},side(c.a,'Scan A'),side(c.b,'Scan B'),
+    el('div',{class:'panel kpi'},el('div',{class:'label',text:'Changed result'}),el('div',{class:'value',text:c.count.changed}),el('div',{class:'foot',text:`${c.count.same} the same`})),
+    el('div',{class:'panel kpi'},el('div',{class:'label',text:'In one scan only'}),el('div',{class:'value',text:c.count.only_a+c.count.only_b}),el('div',{class:'foot',text:`${c.count.only_a} only in A · ${c.count.only_b} only in B`}))));
+  const chips=el('div',{class:'filters'});
+  [['changed','Changed',c.count.changed],['only','In one scan only',c.count.only_a+c.count.only_b],['same','Same',c.count.same],['all','All',c.rows.length]].forEach(([k,l,n])=>
+    chips.append(el('button',{type:'button',class:'chip'+(state.cmpShow===k?' on':''),onclick:()=>{state.cmpShow=k;viewCompare();}},l,el('span',{class:'n',text:n}))));
+  const rows=c.rows.filter(r=>state.cmpShow==='all'||(state.cmpShow==='only'?r.change.startsWith('only'):r.change===state.cmpShow));
+  const res=x=>x?el('div',{class:'cmp-res'},statusPill({group:x.group}),x.conf!=null?el('span',{class:'sub',text:x.conf.toFixed(2)}):null):el('span',{class:'sub',text:'not in this scan'});
+  const tb=el('tbody');
+  rows.forEach(r=>{ const why=el('tr',{class:'cmp-why',hidden:true},el('td',{colspan:5},el('div',{class:'grid-2 even'},
+      el('div',{class:'sect'},el('h4',{text:'Scan A said'}),el('p',{text:r.a?(r.a.reason||'no AI reasoning'):'not in this scan'})),
+      el('div',{class:'sect'},el('h4',{text:'Scan B said'}),el('p',{text:r.b?(r.b.reason||'no AI reasoning'):'not in this scan'})))));
+    tb.append(el('tr',{tabindex:0,onclick:()=>{why.hidden=!why.hidden;},onkeydown:e=>{if(e.key==='Enter')why.hidden=!why.hidden;}},
+      el('td',{},sevBadge(r.sev)),el('td',{},el('div',{class:'title-cell'},el('b',{text:`${r.file}:${(r.b||r.a).line}`}),el('span',{text:`${r.cwe} · ${r.tool} ${r.rule}`}))),
+      el('td',{},res(r.a)),el('td',{},res(r.b)),el('td',{},el('span',{class:'tag'+(r.change==='changed'?' new':''),text:{same:'same',changed:'changed',only_a:'only A',only_b:'only B'}[r.change]}))),why); });
+  out.append(el('div',{class:'panel'},el('div',{class:'panel-h'},el('h2',{text:'Alerts'}),el('span',{class:'sub',text:'matched by scanner rule, file and code line, so moved code still matches · click a row for both reasons'})),chips,
+    rows.length?el('div',{class:'table-wrap'},el('table',{},el('thead',{},el('tr',{},...['Severity','Alert','Scan A','Scan B','Change'].map(h=>el('th',{text:h})))),tb)):el('div',{class:'empty',text:'Nothing in this group.'})));
 }
 
 /* ---------------- Settings / GitHub ---------------- */
@@ -392,7 +443,7 @@ function viewConfig(){
     el('span',{text:'Cloud model (evaluated)'}),el('b',{text:`${STATUS.models.claude.model} · $0.10 in / $0.50 out per million tokens`}),
     el('span',{text:'Stronger cloud model'}),el('b',{text:`${STATUS.models.sonnet.model} · $2 in / $10 out per million tokens · not part of the evaluation`}),
     el('span',{text:'Local model (Ollama)'}),el('b',{text:`${STATUS.models.qwen.model} · free and private, but much slower. Ollama must be running.`}),
-    el('span',{text:'Spending limit'}),el('b',{text:'Set it in the Claude Console. The app shows an estimate before every AI check.'}))));
+    el('span',{text:'Spending limit'}),el('b',{text:'Set one per scan in the New scan window: the check stops before going over it. For a hard monthly cap, also set one in the Claude Console.'}))));
   v.append(panel('Scanners',null,el('div',{class:'panel-b kv'},
     ...Object.entries(STATUS.tools).flatMap(([t,b])=>[el('span',{text:t[0].toUpperCase()+t.slice(1)}),el('b',{},ok(b,'Found','Not found: activate the virtual environment'))]),
     el('span',{text:'Rules'}),el('b',{text:'The project\'s own rules/ folder plus the Semgrep community Python rules, run offline'}))));
@@ -422,12 +473,12 @@ function viewIntegrations(){
 }
 
 /* ---------------- routing ---------------- */
-const PAGES={dashboard:viewDashboard,issues:viewIssues,report:viewReport,projects:viewProjects,scans:viewScans,config:viewConfig,integrations:viewIntegrations};
+const PAGES={dashboard:viewDashboard,issues:viewIssues,report:viewReport,projects:viewProjects,scans:viewScans,compare:viewCompare,config:viewConfig,integrations:viewIntegrations};
 function route(){
   if(!STATUS) return;
   const p=(location.hash||'#dashboard').slice(1); const page=PAGES[p]?p:'dashboard';
   document.querySelectorAll('.nav a[data-page]').forEach(a=>a.classList.toggle('on',a.dataset.page===page||(page==='report'&&a.dataset.page==='dashboard')));
-  const m=$('#mnav'); m.replaceChildren(...['dashboard','issues','projects','scans','config','integrations'].map(k=>el('a',{href:'#'+k,class:k===page?'on':'',text:{dashboard:'Dashboard',issues:'Issues',projects:'Projects',scans:'Scans',config:'Settings',integrations:'GitHub'}[k]})));
+  const m=$('#mnav'); m.replaceChildren(...['dashboard','issues','projects','scans','compare','config','integrations'].map(k=>el('a',{href:'#'+k,class:k===page?'on':'',text:{dashboard:'Dashboard',issues:'Issues',projects:'Projects',scans:'Scans',compare:'Compare',config:'Settings',integrations:'GitHub'}[k]})));
   $('#navOpen').textContent=ISSUES.filter(isOpen).length;
   PAGES[page]();
 }

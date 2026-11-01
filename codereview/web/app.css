@@ -271,3 +271,13 @@ tbody tr.sel{background:var(--accent-soft)}
 .prog.indet span{width:30%;animation:indet 1.2s ease-in-out infinite}
 @keyframes indet{0%{margin-left:-30%}100%{margin-left:100%}}
 @media (max-width:760px){.exploit{grid-template-columns:minmax(0,1fr)}}
+/* extras: New badge, partial runs, compare */
+.tag.new{background:var(--accent-soft);color:var(--accent);margin-left:8px;font-family:var(--sans);font-weight:700}
+.tag.part{background:var(--warn-soft);color:var(--warn);margin-left:6px}
+.sub{color:var(--muted);font-size:12.5px}
+.cmp-pick .lab{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.cmp-pick .sel{min-width:0;max-width:100%;flex:1 1 260px}
+.cmp-res{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+tr.cmp-why td{background:var(--surface-2)}
+.grid-2.even{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:760px){.grid-2.even{grid-template-columns:minmax(0,1fr)}}

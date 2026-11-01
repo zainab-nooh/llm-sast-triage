@@ -25,13 +25,25 @@ def collect(cfg: Config, scan_dir: Path):
     return sarif, bandit, list(groups.values())
 
 
-def run(cfg: Config, progress=None) -> str:
-    """progress: optional function(done, total, finding) called before each group is judged (used by the GUI)."""
+def run(cfg: Config, progress=None, should_stop=None) -> str:
+    """progress: optional function(done, total, finding) called before each group is judged (used by the GUI).
+    should_stop: optional function(spent_so_far) that returns a reason to stop (spending limit, cancel) or None.
+    Groups after a stop are kept unchecked (fail-open) and the run is marked partial."""
     run_id = store.new_run(cfg)
     run_dir = Path(cfg.runs_dir) / run_id
     sarif, bandit, groups = collect(cfg, run_dir)
     raw_log: list = []
+    spent, stopped = 0.0, None
     for i, group in enumerate(groups):
+        if should_stop and not stopped and not cfg.skip_judge:
+            stopped = should_stop(spent)
+            if stopped:
+                store.mark_partial(cfg.runs_dir, run_id, stopped)
+        if stopped:                                                      # never hide what was not checked
+            for g in group:
+                store.save(cfg, run_id, g, None, None,
+                           Decision(action="keep", reason=f"not checked by the AI: {stopped}", verified=True), {})
+            continue
         if progress:
             progress(i, len(groups), group[0])
         t0 = time.time()
@@ -52,6 +64,7 @@ def run(cfg: Config, progress=None) -> str:
         verdict, verified, why = verifier.check(verdict, ctx)            # 6. verify evidence
         decision = gate.decide(verdict, verified, cfg.threshold)         # 7. fail-open gate
         meta["seconds"] = round(time.time() - t0, 3)
+        spent += meta.get("cost", 0.0) or 0.0
         store.save(cfg, run_id, f, ctx, verdict, decision, meta)         # 8. store (the cost is counted once)
         for g in others:
             store.save(cfg, run_id, g, ctx, verdict, decision, {})

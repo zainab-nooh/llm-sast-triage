@@ -18,7 +18,8 @@ SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 GENERIC = {"src", "web", "app", "lib", "code", "python"}   # folder names that say nothing about the project
 GROUPS = [("confirmed", "Confirmed by AI", "The model traced untrusted input to the flagged line. Fix these first."),
           ("uncertain", "Needs review", "The model could not prove these safe or unsafe. A person should decide."),
-          ("scanner_only", "Scanner only", "No AI judgement (the weakness type has no policy rule), so they are kept."),
+          ("scanner_only", "Not checked by the AI",
+           "No AI judgement: the weakness type has no policy rule, or the scan stopped before reaching them. Kept for a person."),
           ("suppressed", "Hidden as likely false positives",
            "Hidden from the main list because the model was confident they are safe. Listed here so they can be audited.")]
 LABELS = {"real": "Real", "fp": "False alarm", "unsure": "Unsure"}
@@ -103,7 +104,7 @@ def build(runs_dir: str, run_id: str) -> Path:
         project=project_name(config.get("target", "")), by_cwe=sorted(by_cwe.items(), key=lambda kv: (SEV_ORDER.get(kv[1]["sev"], 9), kv[0])),
         hidden_pct=round(100 * len(groups["suppressed"]) / total) if total else 0,
         reviewed=sum(1 for g in groups.values() for i in g if i["review"]),
-        cost=cost, seconds=seconds, generated=datetime.now().strftime("%d %b %Y, %H:%M"),
+        cost=cost, seconds=seconds, partial=store.partial_reason(runs_dir, run_id), generated=datetime.now().strftime("%d %b %Y, %H:%M"),
         logo_main=_logo("logo-main.png"), logo_by=_logo("logo-by.png"))
     out = Path(runs_dir) / run_id / "report.html"
     out.write_text(html, encoding="utf-8")  # utf-8, or Windows fails on characters like emoji in model text

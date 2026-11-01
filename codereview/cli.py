@@ -64,7 +64,11 @@ def evaluate_cmd(truth: str, run_id: Optional[str] = None, threshold: Optional[f
                  cwe: List[str] = typer.Option(None, help="score only this CWE (repeat for more)"),
                  runs_dir: str = Config().runs_dir):
     """Compare a run with benchmark truth (precision, recall, F1, F2, false positives removed, real findings lost)."""
-    typer.echo(json.dumps(ev.evaluate(runs_dir, _resolve(run_id, runs_dir), truth, threshold, cwe or None), indent=2))
+    rid = _resolve(run_id, runs_dir)
+    why = store.partial_reason(runs_dir, rid)
+    if why:
+        typer.echo(f"WARNING: run {rid} stopped early ({why}); its results are incomplete.", err=True)
+    typer.echo(json.dumps(ev.evaluate(runs_dir, rid, truth, threshold, cwe or None), indent=2))
 
 
 @app.command("sweep")

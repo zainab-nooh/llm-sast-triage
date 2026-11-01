@@ -254,6 +254,19 @@ def test_report_escapes_untrusted_html(tmp_path):
     assert "<b>XSS</b>" not in html and "&lt;b&gt;XSS" in html
 
 
+def test_report_matches_app_and_shows_severity_and_my_decision(tmp_path):
+    cfg = Config(target=TARGET, provider="mock", runs_dir=str(tmp_path), sarif_path=str(FIX / "semgrep.sarif"),
+                 bandit_path=str(FIX / "bandit.json"))
+    run_id = pipeline.run(cfg)
+    fid = store.load_run(cfg.runs_dir, run_id)[0]["finding"]["id"]
+    store.save_review(cfg.runs_dir, run_id, fid, "real", "=cmd|' /C calc'!A0 <i>note</i>")
+    html = report.build(cfg.runs_dir, run_id).read_text(encoding="utf-8")
+    assert "Summary by weakness" in html and 'class="sev ' in html and "Your decision" in html
+    assert "data:image/png;base64," in html                     # logo travels inside the file
+    assert "<i>note</i>" not in html and "&lt;i&gt;note" in html  # my note is escaped too
+    assert "<script" not in html                                # the report runs no code
+
+
 def test_alert_without_a_policy_rule_is_kept_without_asking_the_model(tmp_path):
     (tmp_path / "app.py").write_text("from flask import Flask\napp = Flask(__name__)\napp.run(debug=True)\n")
     (tmp_path / "semgrep.sarif").write_text('{"runs": []}')

@@ -36,6 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import llm, pipeline, policy, report, store
+from .report import CWES, project_name
 from .config import ROOT, Config
 
 WEB = Path(__file__).parent / "web"
@@ -43,24 +44,13 @@ CONTEXT_LEVEL, THRESHOLD = 2, 0.6          # the settings frozen for the evaluat
 FALLBACK_CALL_COST = 0.003                 # dollars per Claude call when there are no earlier runs to average
 MODELS = {"claude": ("anthropic", "claude-haiku-5-5"), "sonnet": ("anthropic", "claude-sonnet-5-5"),
           "qwen": ("ollama", "qwen3:14b"), "mock": ("mock", "mock")}   # Haiku is the evaluated model; Sonnet is an extra, not evaluated
-CWES = {"CWE-89": ("SQL injection", "high"), "CWE-78": ("OS command injection", "high"),
-        "CWE-95": ("Code injection", "critical"), "CWE-502": ("Unsafe deserialization", "critical"),
-        "CWE-611": ("XML external entities", "high"), "CWE-614": ("Cookie without Secure flag", "medium")}
 LABELS = {"real", "fp", "unsure"}
-GENERIC = {"src", "web", "app", "lib", "code", "python"}   # folder names that say nothing about the project
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
        "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
        "base-uri 'none'; form-action 'none'")
 
 
 # ------------------------------------------------------------------ helpers
-def project_name(target: str) -> str:
-    p = Path(str(target).replace("\\", "/"))
-    if p.name.lower() in GENERIC and p.parent.name:
-        return f"{p.parent.name}/{p.name}"
-    return p.name or str(target)
-
-
 def group_of(row: dict) -> str:
     """Same three groups as the HTML report. Alerts the model did not judge are kept for review."""
     if row["decision"]["action"] == "suppress":

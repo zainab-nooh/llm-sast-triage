@@ -18,6 +18,8 @@ from .models import Evidence, Verdict
 
 # JSON Schema the model must follow (Claude "structured outputs"). It mirrors models.Verdict.
 # Range checks (confidence between 0 and 1) are still done by Pydantic after the reply arrives.
+# Order matters: the model writes fields in this order, so evidence and reasoning come BEFORE the verdict.
+# Otherwise it picks a verdict first and its later reasoning can contradict it.
 VERDICT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -27,10 +29,10 @@ VERDICT_SCHEMA = {
             "properties": {"file": {"type": "string"}, "lines": {"type": "string"}, "why": {"type": "string"}},
             "required": ["file", "lines", "why"], "additionalProperties": False}},
         "reasoning": {"type": "string"},
-                "verdict": {"type": "string", "enum": ["confirmed", "likely_false_positive", "uncertain"]},
-        "confidence_score": {"type": "number"},
         "sanitization_present": {"type": "boolean"},
         "attack_feasible": {"type": "boolean"},
+        "verdict": {"type": "string", "enum": ["confirmed", "likely_false_positive", "uncertain"]},
+        "confidence_score": {"type": "number"},
         "policy_rule_id": {"type": "string"},
         "cwe": {"type": "string"},
         "suggested_fix": {"type": "string"},
@@ -41,6 +43,20 @@ VERDICT_SCHEMA = {
 }
 
 # Models that accept the server-side refusal fallback (see the Claude API docs on refusals).
+# Dollars per million tokens (input, output), Anthropic list prices checked on 1 Nov 2026 (prompts under 100K tokens).
+# Known models use this table, so runs with different models are costed correctly. Any other paid model uses
+# CODEREVIEW_PRICE_IN / CODEREVIEW_PRICE_OUT from .env. Local models (Ollama) and the mock model cost nothing.
+PRICES = {"claude-haiku-5-5": (0.10, 0.50), "claude-sonnet-5-5": (2.0, 10.0), "claude-opus-5-5": (4.0, 20.0)}
+
+
+def price(cfg: Config) -> Tuple[float, float]:
+    if cfg.provider not in ("anthropic", "openai"):
+        return 0.0, 0.0
+    if cfg.model in PRICES:
+        return PRICES[cfg.model]
+    return float(os.getenv("CODEREVIEW_PRICE_IN", 0)), float(os.getenv("CODEREVIEW_PRICE_OUT", 0))
+
+
 FALLBACK_MODELS = ("claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5")
 
 DECLINED = json.dumps({"verdict": "uncertain", "confidence_score": 0.0,
@@ -114,6 +130,8 @@ def complete(system: str, user: str, cfg: Config) -> Tuple[str, int, int]:
         req = urllib.request.Request("http://localhost:11434/api/chat", method="POST",
                                      headers={"Content-Type": "application/json"},
                                      data=json.dumps({"model": cfg.model, "stream": False, "format": "json",
+                                                      # Ollama's default context window (2048-4096 tokens) silently cuts long
+                                                      # prompts from the start, so the rules and rubric would be lost.
                                                       "options": {"temperature": 0,
                                                                   "num_ctx": int(os.getenv("CODEREVIEW_OLLAMA_CTX", 8192))},
                                                       "messages": [{"role": "system", "content": system},
@@ -157,5 +175,6 @@ def judge(system: str, user: str, cfg: Config, finding_id: str, raw_log: list) -
     best.confidence_score = round(sum(v.confidence_score for v in chosen) / len(chosen), 3)
     if len(set(v.verdict for v in verdicts)) > 1:     # voters disagreed: be careful
         best.confidence_score = min(best.confidence_score, 0.5)
-    cost = (tin * float(os.getenv("CODEREVIEW_PRICE_IN", 0)) + tout * float(os.getenv("CODEREVIEW_PRICE_OUT", 0))) / 1e6
+    p_in, p_out = price(cfg)
+    cost = (tin * p_in + tout * p_out) / 1e6
     return best, {"tokens_in": tin, "tokens_out": tout, "cost": cost}

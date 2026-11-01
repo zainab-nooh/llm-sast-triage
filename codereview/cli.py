@@ -1,4 +1,4 @@
-"""Commands:  run, report, evaluate, sweep, inspect.   Example: python -m codereview run sample_target"""
+"""Commands:  run, report, evaluate, sweep, inspect, serve.   Example: python -m codereview run sample_target"""
 import json
 from pathlib import Path
 from typing import List, Optional
@@ -104,6 +104,25 @@ def inspect_cmd(file: str = typer.Argument(..., help="part of a file name, e.g. 
         if show_prompt:
             system, user = prompts.build(f, ctx, policy.for_cwe(f.cwe, cfg.policy_path, cfg.rubrics_dir))
             typer.echo(f"--- SYSTEM PROMPT\n{system}\n--- USER PROMPT\n{user}")
+
+
+@app.command("serve")
+def serve_cmd(port: int = typer.Option(8765, help="port on this computer"),
+              browser: bool = typer.Option(True, help="open the browser (--no-browser to only print the link)")):
+    """Start the web app on this computer only (127.0.0.1). Open the printed link; it holds this session's token."""
+    import secrets
+    import webbrowser
+
+    import uvicorn
+
+    from .server import create_app
+
+    token = secrets.token_urlsafe(32)
+    url = f"http://127.0.0.1:{port}/#t={token}"
+    typer.echo(f"SAST Triage is running on this computer only.\nOpen this link (it contains your session key, do not share it):\n  {url}\nPress Ctrl+C to stop.")
+    if browser:
+        webbrowser.open(url)
+    uvicorn.run(create_app(token=token, port=port), host="127.0.0.1", port=port, log_level="warning")
 
 
 if __name__ == "__main__":

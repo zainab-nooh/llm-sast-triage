@@ -7,10 +7,9 @@ from .config import Config
 from .models import Decision, Verdict
 
 
-def run(cfg: Config) -> str:
-    run_id = store.new_run(cfg)
-    run_dir = Path(cfg.runs_dir) / run_id
-    sarif, bandit = scanners.run_all(cfg, run_dir)                       # 1. scan
+def collect(cfg: Config, scan_dir: Path):
+    """Steps 1 to 2b without any model call: scan, ingest, group. The GUI also uses it to count alerts and estimate cost."""
+    sarif, bandit = scanners.run_all(cfg, scan_dir)                      # 1. scan
     findings = ingest.parse_all(sarif, bandit, cfg.target,              # 2. ingest, filter, merge copies
                                 cfg.security_only, cfg.only_cwes)
     if cfg.only_scored:     # skip alerts the benchmark has no answer for: they cost money but change no metric
@@ -18,13 +17,23 @@ def run(cfg: Config) -> str:
         findings = [f for f in findings if f.cwe and evaluate._key(f.file, f.cwe) in truth]
     if cfg.max_findings:
         findings = findings[: cfg.max_findings]
-    raw_log: list = []
     groups: dict = {}                                                    # 2b. group alerts by file, function, CWE
     for f in findings:
         fn = slicer.function_key(f, cfg.target) if cfg.group else None
         key = (f.file, fn, f.cwe) if fn is not None else (f.id,)
         groups.setdefault(key, []).append(f)
-    for group in groups.values():
+    return sarif, bandit, list(groups.values())
+
+
+def run(cfg: Config, progress=None) -> str:
+    """progress: optional function(done, total, finding) called before each group is judged (used by the GUI)."""
+    run_id = store.new_run(cfg)
+    run_dir = Path(cfg.runs_dir) / run_id
+    sarif, bandit, groups = collect(cfg, run_dir)
+    raw_log: list = []
+    for i, group in enumerate(groups):
+        if progress:
+            progress(i, len(groups), group[0])
         t0 = time.time()
         f, others = group[0], group[1:]
         if cfg.skip_judge:                                               # setup A: scanner only

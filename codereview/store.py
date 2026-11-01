@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS results (
   run_id TEXT, finding_id TEXT, finding TEXT, context TEXT, verdict TEXT, decision TEXT, verified INTEGER,
   tokens_in INTEGER, tokens_out INTEGER, cost REAL, seconds REAL
 );
+CREATE TABLE IF NOT EXISTS reviews (
+  run_id TEXT, finding_id TEXT, label TEXT, note TEXT, updated TEXT, PRIMARY KEY (run_id, finding_id)
+);
 """
 
 
@@ -24,8 +27,12 @@ def connect(runs_dir: str) -> sqlite3.Connection:
 
 
 def new_run(cfg: Config) -> str:
-    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_id = base = datetime.now().strftime("%Y%m%d-%H%M%S")
     con = connect(cfg.runs_dir)
+    n = 1
+    while con.execute("SELECT 1 FROM runs WHERE id=?", (run_id,)).fetchone():   # two runs in the same second
+        n += 1
+        run_id = f"{base}-{n}"
     con.execute("INSERT INTO runs VALUES (?,?,?)", (run_id, datetime.now().isoformat(), cfg.model_dump_json()))
     con.commit()
     (Path(cfg.runs_dir) / run_id).mkdir(parents=True, exist_ok=True)
@@ -64,3 +71,46 @@ def load_run(runs_dir: str, run_id: str) -> List[dict]:
 def load_config(runs_dir: str, run_id: str) -> dict:
     row = connect(runs_dir).execute("SELECT config FROM runs WHERE id=?", (run_id,)).fetchone()
     return json.loads(row[0]) if row else {}
+
+
+def save_review(runs_dir: str, run_id: str, finding_id: str, label: str, note: str = "") -> None:
+    """A person's decision on one alert (from the GUI). Kept apart from the model's verdict, never mixed with it."""
+    con = connect(runs_dir)
+    con.execute("INSERT OR REPLACE INTO reviews VALUES (?,?,?,?,?)",
+                (run_id, finding_id, label, note, datetime.now().isoformat(timespec="seconds")))
+    con.commit()
+
+
+def load_reviews(runs_dir: str, run_id: str) -> dict:
+    rows = connect(runs_dir).execute("SELECT finding_id, label, note, updated FROM reviews WHERE run_id=?", (run_id,))
+    return {r[0]: {"label": r[1], "note": r[2], "updated": r[3]} for r in rows}
+
+
+def list_runs(runs_dir: str) -> List[dict]:
+    """One summary row per run, newest first: settings, alert count, hidden count, cost and time."""
+    con = connect(runs_dir)
+    out = []
+    for rid, created, conf in con.execute("SELECT id, created, config FROM runs ORDER BY created DESC").fetchall():
+        c = json.loads(conf)
+        n, hidden, cost, secs = con.execute(
+            "SELECT COUNT(*), SUM(json_extract(decision, '$.action') = 'suppress'), COALESCE(SUM(cost), 0), "
+            "COALESCE(SUM(seconds), 0) FROM results WHERE run_id=?", (rid,)).fetchone()
+        out.append({"id": rid, "created": created[:16].replace("T", " "), "target": c.get("target", ""),
+                    "provider": c.get("provider", ""), "model": "scanner only" if c.get("skip_judge") else c.get("model", ""),
+                    "threshold": c.get("threshold"), "context_level": c.get("context_level"),
+                    "alerts": n, "hidden": hidden or 0, "cost": round(cost, 4), "seconds": round(secs, 1)})
+    return out
+
+
+def average_call_cost(runs_dir: str, provider: str, model: Optional[str] = None) -> Optional[float]:
+    """Average cost of one model call in earlier runs with this provider (and model, if given), for the cost estimate."""
+    con = connect(runs_dir)
+    q, args = "SELECT id FROM runs WHERE json_extract(config, '$.provider') = ?", [provider]
+    if model:
+        q, args = q + " AND json_extract(config, '$.model') = ?", args + [model]
+    ids = [r[0] for r in con.execute(q, args)]
+    if not ids:
+        return None
+    marks = ",".join("?" * len(ids))
+    row = con.execute(f"SELECT AVG(cost) FROM results WHERE cost > 0 AND run_id IN ({marks})", ids).fetchone()  # nosec B608: only ? placeholders are inserted
+    return row[0]

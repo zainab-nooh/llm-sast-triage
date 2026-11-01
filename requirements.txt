@@ -10,6 +10,9 @@ pytest==9.1.1
 # Model providers:
 anthropic==1.13.0
 openai==3.31.0
-# Optional dashboard (stretch goal, not tested yet):
-streamlit==1.65.0
-pandas==3.0.6
+# Local web app (codereview/server.py). Keep starlette and opentelemetry-api at the versions semgrep needs:
+starlette==1.6.0
+opentelemetry-api==1.37.0
+fastapi==0.141.1   # newer fastapi needs a newer opentelemetry, which breaks semgrep 1.180
+uvicorn==0.53.0
+httpx==0.28.1   # only for the web app tests

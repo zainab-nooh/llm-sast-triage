@@ -56,6 +56,25 @@ python -m codereview run $B/testcode --cwe CWE-89 --only-scored $B/expectedresul
 The Claude call uses **structured outputs** (the reply must match a JSON schema) and sends no `temperature`,
 because current Claude models reject it. Model names and prices change: check the official docs.
 
+## 4b. Use the web app
+
+```bash
+python -m codereview serve
+```
+
+It prints a link like `http://127.0.0.1:8765/#t=...` and opens it in your browser. Only this computer can reach the
+app, and the link holds a new session key each time you start it (do not share it). Press Ctrl+C to stop.
+- **New scan:** type a folder, pick a model and the weakness types, press *Scan and estimate* (free, no AI), check
+  the alert count and cost, then press *Start AI triage*. You can close the window; the scan keeps running.
+- **Dashboard:** open issues, alerts waiting for you, noise removed by the AI, alerts per project and by type,
+  and how many auto-ignored alerts you checked.
+- **Issues:** filters, and for each alert the AI verdict, exploitability, the evidence it cited, the code it saw,
+  a suggested fix, and buttons to record your own decision (saved apart from the AI verdict).
+- **Scans:** every run (from the app or the command line) with cost and time, plus the HTML report, CSV and
+  SARIF downloads. The OWASP view groups issues by OWASP Top 10:2025 category.
+
+The app uses the evaluated settings (context level 2, threshold 0.6) and the same pipeline as the command line.
+
 ## 5. Folder map
 
 | Path | What it is | Your job |
@@ -70,7 +89,7 @@ because current Claude models reject it. Model names and prices change: check th
 | `codereview/store.py` | SQLite + JSONL storage | Keep every run's settings and raw replies |
 | `codereview/evaluate.py` | Metrics and threshold sweep | Reads the OWASP answer key directly |
 | `codereview/report.py`, `templates/` | HTML report | Polish for the demo |
-| `codereview/dashboard.py` | Optional Streamlit dashboard | Only after the pipeline works end to end |
+| `codereview/server.py`, `web/` | Local web app: API (FastAPI) and the page (plain HTML, CSS, JavaScript) | `python -m codereview serve` |
 | `rules/security.yml` | Local Semgrep rules (offline) | Add rules for simple policies |
 | `tests/` | pytest tests with a fake model | Add a test with every new feature |
 | `scripts/get_data.sh` | Downloads the benchmark and Semgrep rules at fixed versions | Run once |
@@ -90,7 +109,7 @@ because current Claude models reject it. Model names and prices change: check th
 - **Tested here:** all 13 tests pass (the 12 earlier ones also passed on Windows, Python 3.13 in UCRT64, on 14 Oct); the scanner-only baseline on the full benchmark; the whole pipeline on the
   benchmark with the fake model; the Claude request against a local stand-in server (request shape, structured output,
   no temperature, refusal handling).
-- **Not tested here:** a real Claude, OpenAI or Ollama call (no API key was used), Docker, and the Streamlit dashboard.
+- **Not tested here:** a real Claude, OpenAI or Ollama call (no API key was used), and Docker.
   Expect small fixes when you first use them. The OpenAI code still sends `temperature=0`, which some newer
   OpenAI models reject.
 - The fake model is a simple rule of thumb for demos and tests. **Never report its numbers as results.**

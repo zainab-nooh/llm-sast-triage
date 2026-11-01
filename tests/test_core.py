@@ -182,6 +182,7 @@ def test_verifier_accepts_range_across_skipped_lines():
     bad = Verdict(verdict="likely_false_positive", confidence_score=0.9, evidence=[Evidence(file="app.py", lines="54-56")])
     assert not verifier.check(bad, ctx)[1]
 
+
 def test_slicer_keeps_the_condition_that_chooses_the_value():
     """bar is a constant or user input depending on an if or a match. The slice must show the condition and
     the values it tests, or the model cannot tell which branch runs (control dependence)."""
@@ -192,11 +193,7 @@ def test_slicer_keeps_the_condition_that_chooses_the_value():
         assert s in text_if
     for s in ['possible = "ABC"', "guess = possible[1]", "match guess:", "case 'B':"]:
         assert s in text_case
-    assert "noise" not in text_if and "noise" not in text_case 
-
-
-
-
+    assert "noise" not in text_if and "noise" not in text_case
 
 
 def test_slicer_follows_the_module_when_the_alert_is_on_an_import():
@@ -207,8 +204,6 @@ def test_slicer_follows_the_module_when_the_alert_is_on_an_import():
     for s in ["bar = param", "import xml.sax", "parser = xml.sax.make_parser()", "xml.sax.parseString(bar, parser)"]:
         assert s in text
     assert "noise" not in text and "import line" in ctx.note
-
-
 
 
 def test_alerts_in_one_function_are_grouped_and_judged_together():
@@ -234,8 +229,7 @@ def test_slicer_shows_helper_functions_from_other_files():
     ret = next(n for _, n, t in ctx.helpers if "return" in t)
     v = Verdict(verdict="likely_false_positive", confidence_score=0.9,
                 evidence=[Evidence(file="helpers/wrapper.py", lines=str(ret))])
-    assert verifier.check(v, ctx)[1]         
-
+    assert verifier.check(v, ctx)[1]
 
 
 def test_model_failure_keeps_the_alert(monkeypatch):
@@ -271,3 +265,134 @@ def test_alert_without_a_policy_rule_is_kept_without_asking_the_model(tmp_path):
     rows = store.load_run(cfg.runs_dir, pipeline.run(cfg))
     assert len(rows) == 1 and rows[0]["finding"]["cwe"] == "CWE-489"   # B201 is debug code, not code injection
     assert rows[0]["verdict"] is None and rows[0]["decision"]["action"] == "keep"
+
+
+def test_progress_reports_each_group_and_reviews_are_saved(tmp_path):
+    cfg = Config(target=TARGET, provider="mock", runs_dir=str(tmp_path), sarif_path=str(FIX / "semgrep.sarif"),
+                 bandit_path=str(FIX / "bandit.json"))
+    seen = []
+    run_id = pipeline.run(cfg, progress=lambda done, total, f: seen.append((done, total)))
+    assert seen and seen[0] == (0, len(seen)) and seen[-1][0] == len(seen) - 1
+    fid = store.load_run(cfg.runs_dir, run_id)[0]["finding"]["id"]
+    store.save_review(cfg.runs_dir, run_id, fid, "False positive", "checked by hand")
+    store.save_review(cfg.runs_dir, run_id, fid, "Real vulnerability")       # a second save replaces the first
+    assert store.load_reviews(cfg.runs_dir, run_id) == {fid: {
+        "label": "Real vulnerability", "note": "", "updated": store.load_reviews(cfg.runs_dir, run_id)[fid]["updated"]}}
+    summary = store.list_runs(cfg.runs_dir)[0]
+    assert summary["id"] == run_id and summary["alerts"] == len(store.load_run(cfg.runs_dir, run_id))
+
+
+def _web(tmp_path, monkeypatch=None):
+    from fastapi.testclient import TestClient
+
+    from codereview import server
+    cfg = Config(target=TARGET, provider="mock", runs_dir=str(tmp_path), sarif_path=str(FIX / "semgrep.sarif"),
+                 bandit_path=str(FIX / "bandit.json"))
+    run_id = pipeline.run(cfg)
+    app = server.create_app(runs_dir=str(tmp_path), token="secret-token", port=8765, extra_hosts=("testserver",))
+    return TestClient(app), run_id, {"X-Token": "secret-token"}
+
+
+def test_web_api_needs_token_and_right_host(tmp_path):
+    client, run_id, h = _web(tmp_path)
+    assert client.get("/api/issues").status_code == 401                        # no token
+    assert client.get("/api/issues", headers={"X-Token": "wrong"}).status_code == 401
+    assert client.get("/api/issues", headers={**h, "Host": "evil.example:8765"}).status_code == 403   # DNS rebinding
+    assert client.get("/api/issues", headers={**h, "Host": "127.0.0.1:8765"}).status_code == 200
+    assert client.post("/api/reviews", headers={**h, "Origin": "http://evil.example"},
+                       json={"run": run_id, "fid": "x", "label": "fp"}).status_code == 403
+    page = client.get("/")
+    assert page.status_code == 200 and "app.js" in page.text
+    assert "script-src 'self'" in page.headers["content-security-policy"]
+
+
+def test_web_issues_reviews_and_exports(tmp_path):
+    client, run_id, h = _web(tmp_path)
+    issues = client.get("/api/issues", headers=h).json()
+    assert len(issues) == len(store.load_run(str(tmp_path), run_id)) and issues[0]["run"] == run_id
+    assert {i["group"] for i in issues} <= {"Confirmed", "Needs review", "Hidden"}
+    fid = issues[0]["fid"]
+    assert client.post("/api/reviews", headers=h, json={"run": run_id, "fid": fid, "label": "maybe"}).status_code == 400
+    assert client.post("/api/reviews", headers=h, json={"run": "nope", "fid": fid, "label": "fp"}).status_code == 404
+    assert client.post("/api/reviews", headers=h, json={"run": run_id, "fid": fid, "label": "fp", "note": "=cmd|' /C calc'!A0"}).status_code == 200
+    again = {i["fid"]: i for i in client.get(f"/api/issues?run={run_id}", headers=h).json()}
+    assert again[fid]["review"]["label"] == "fp"
+    csv_text = client.get(f"/api/runs/{run_id}/export.csv", headers=h).text
+    assert "'=cmd" in csv_text and ",=cmd" not in csv_text                      # formula injection blocked
+    sarif = client.get(f"/api/runs/{run_id}/export.sarif", headers=h).json()
+    assert sarif["version"] == "2.1.0" and len(sarif["runs"][0]["results"]) == len(issues)
+    assert client.get(f"/api/runs/{run_id}/report.html", headers=h).status_code == 200
+    assert client.get("/api/runs/..%2F..%2Fetc/report.html", headers=h).status_code == 404
+    runs = client.get("/api/runs", headers=h).json()
+    assert runs[0]["id"] == run_id and runs[0]["latest"]
+
+
+def test_web_scan_job_counts_then_judges(tmp_path, monkeypatch):
+    from codereview import server
+    client, _, h = _web(tmp_path)
+    real_collect = server.pipeline.collect
+    monkeypatch.setattr(server.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(server.pipeline, "collect", lambda cfg, d: real_collect(
+        cfg.model_copy(update={"sarif_path": str(FIX / "semgrep.sarif"), "bandit_path": str(FIX / "bandit.json")}), d))
+    monkeypatch.setitem(server.MODELS, "mock", ("mock", "mock"))
+    assert client.post("/api/scans", headers=h, json={"folder": str(tmp_path / "missing"), "cwes": ["CWE-89"], "model": "mock"}).status_code == 400
+    job = client.post("/api/scans", headers=h, json={"folder": TARGET, "cwes": list(server.CWES), "model": "mock"}).json()
+    import time
+    for _ in range(100):
+        job = client.get(f"/api/scans/{job['id']}", headers=h).json()
+        if job["state"] != "counting":
+            break
+        time.sleep(0.05)
+    assert job["state"] == "counted" and job["alerts"] > 0 and job["estimate"] == 0.0
+    client.post(f"/api/scans/{job['id']}/start", headers=h)
+    for _ in range(200):
+        job = client.get(f"/api/scans/{job['id']}", headers=h).json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert job["state"] == "done", job.get("error")
+    assert len(client.get(f"/api/issues?run={job['run_id']}", headers=h).json()) == job["alerts"]
+
+
+def test_github_links_are_checked_before_download(tmp_path, monkeypatch):
+    from codereview import server
+    assert server.parse_github("https://github.com/owner/repo") == ("owner", "repo", "")
+    assert server.parse_github("github.com/owner/repo.git/", "v1.2") == ("owner", "repo", "v1.2")
+    assert server.parse_github("https://github.com/owner/repo/tree/feature/x") == ("owner", "repo", "feature/x")
+    assert server.parse_github("data/real/pygoat") is None              # a local folder, not a link
+    assert server.parse_github("ext::sh -c touch% /tmp/x") is None       # never passed to git
+    for bad in ("https://github.com/owner/..", "https://github.com/owner/repo/tree/--upload-pack=x"):
+        try:
+            server.parse_github(bad)
+            assert False, bad
+        except server.HTTPException:
+            pass
+    client, _, h = _web(tmp_path)
+    assert client.post("/api/scans", headers=h, json={"folder": "https://github.com/o/r", "ref": "-x", "cwes": ["CWE-89"],
+                                                      "model": "mock"}).status_code == 400
+    calls = []
+    monkeypatch.setattr(server.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(server, "clone_repo", lambda o, r, ref, dest: calls.append((o, r, ref, dest)) or "abc1234")
+    monkeypatch.setattr(server.pipeline, "collect", lambda cfg, d: (None, None, []))
+    job = client.post("/api/scans", headers=h, json={"folder": "https://github.com/o/r", "ref": "v2", "cwes": ["CWE-89"], "model": "mock"}).json()
+    assert job["state"] == "cloning" and job["project"] == "r" and "_gh" not in job
+    import time
+    for _ in range(100):
+        job = client.get(f"/api/scans/{job['id']}", headers=h).json()
+        if job["state"] not in ("cloning", "counting"):
+            break
+        time.sleep(0.05)
+    assert job["state"] == "counted" and job["commit"] == "abc1234" and calls[0][:3] == ("o", "r", "v2")
+    assert str(calls[0][3]).startswith(str(tmp_path.resolve()))          # downloaded inside runs/, nowhere else
+
+
+def test_each_model_is_costed_at_its_own_price(monkeypatch):
+    from codereview import llm, server
+    monkeypatch.setenv("CODEREVIEW_PRICE_IN", "0.10")          # the .env prices must not override known models
+    monkeypatch.setenv("CODEREVIEW_PRICE_OUT", "0.50")
+    assert llm.price(Config(provider="anthropic", model="claude-sonnet-5-5")) == (2.0, 10.0)
+    assert llm.price(Config(provider="anthropic", model="claude-haiku-5-5")) == (0.10, 0.50)
+    assert llm.price(Config(provider="ollama", model="qwen3:14b")) == (0.0, 0.0)
+    assert llm.price(Config(provider="anthropic", model="some-new-model")) == (0.10, 0.50)
+    assert server.MODELS["claude"] == ("anthropic", "claude-haiku-5-5")      # Haiku stays the evaluated default
+    assert server.MODELS["sonnet"] == ("anthropic", "claude-sonnet-5-5")

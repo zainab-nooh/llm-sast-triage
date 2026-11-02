@@ -1,4 +1,4 @@
-"""Commands:  run, report, evaluate, sweep, inspect, serve.   Example: python -m codereview run sample_target"""
+"""Commands:  run, report, evaluate, sweep, inspect, serve, ci.   Example: python -m codereview run sample_target"""
 import json
 from pathlib import Path
 from typing import List, Optional
@@ -108,6 +108,26 @@ def inspect_cmd(file: str = typer.Argument(..., help="part of a file name, e.g. 
         if show_prompt:
             system, user = prompts.build(f, ctx, policy.for_cwe(f.cwe, cfg.policy_path, cfg.rubrics_dir))
             typer.echo(f"--- SYSTEM PROMPT\n{system}\n--- USER PROMPT\n{user}")
+
+
+@app.command("ci")
+def ci_cmd(target: str = typer.Argument(..., help="folder to scan, relative to the repository root (e.g. . or src)"),
+           model: str = typer.Option("auto", help="auto (Claude Haiku if ANTHROPIC_API_KEY is set, else scanner only) | claude | sonnet | scanner | mock"),
+           cwe: List[str] = typer.Option(None, help="only this CWE (repeat for more); default all six"),
+           max_cost: float = typer.Option(1.0, help="stop the AI at this many US$; unchecked alerts are kept"),
+           sarif_out: str = typer.Option("sast-triage.sarif", help="where to write the SARIF file"),
+           summary: Optional[str] = typer.Option(None, help="append a Markdown summary here (GitHub: $GITHUB_STEP_SUMMARY)"),
+           fail_on: str = typer.Option("confirmed", help="confirmed | review | never: which alerts fail the check"),
+           annotate: bool = typer.Option(True, help="print GitHub annotations (--no-annotate to turn off)")):
+    """For CI pipelines: scan with the frozen settings, write SARIF + summary, exit 1 if alerts match --fail-on."""
+    from . import ci
+    try:
+        code = ci.run_ci(target, model=model, cwes=cwe, max_cost=max_cost, sarif_out=sarif_out,
+                         summary_out=summary, fail_on=fail_on, annotate=annotate, echo=typer.echo)
+    except (ValueError, RuntimeError) as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(2)
+    raise typer.Exit(code)
 
 
 @app.command("serve")

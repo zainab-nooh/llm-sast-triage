@@ -478,3 +478,29 @@ def test_docker_settings(monkeypatch):
         llm.ollama_url()
     msg = _clean_error(Exception("cannot open /home/zaina/secret/project/app.py with key sk-ant-api03-ABCDEFGHIJ"))
     assert "zaina" not in msg and "ABCDEFGHIJ" not in msg and "app.py" in msg
+
+
+def test_ci_command(tmp_path, monkeypatch):
+    """CI mode: SARIF + summary + annotations, exit 1 on confirmed alerts, no key means scanner only, untrusted text escaped."""
+    import json as _json
+    import pytest
+    from codereview import ci
+    assert ci.md("[click](http://x) <b>|") == "\\[click\\]\\(http://x\\) \\<b\\>\\|"
+    assert ci.annotation("error", "a,b.py", 3, "T: x", "line1\nline2 100%") == "::error file=a%2Cb.py,line=3,title=T%3A x::line1%0Aline2 100%25"
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert ci.choose_model("auto")[0] == "scanner"
+    with pytest.raises(ValueError):
+        ci.choose_model("claude")
+    out, summary = [], tmp_path / "summary.md"
+    code = ci.run_ci("sample_target", model="mock", sarif_out=str(tmp_path / "r.sarif"), summary_out=str(summary),
+                     runs_dir=str(tmp_path / "runs"), echo=out.append)
+    sarif = _json.loads((tmp_path / "r.sarif").read_text())
+    assert code == 1 and sarif["runs"][0]["results"]
+    assert all(r["locations"][0]["physicalLocation"]["artifactLocation"]["uri"].startswith("sample_target/")
+               for r in sarif["runs"][0]["results"])
+    assert any(line.startswith("::error file=sample_target/") for line in out)
+    assert "## SAST Triage" in summary.read_text()
+    code = ci.run_ci("sample_target", model="auto", sarif_out=str(tmp_path / "s.sarif"), runs_dir=str(tmp_path / "runs"),
+                     echo=out.append)
+    assert code == 0          # scanner only: nothing confirmed, nothing hidden
+    assert not any(r.get("suppressions") for r in _json.loads((tmp_path / "s.sarif").read_text())["runs"][0]["results"])

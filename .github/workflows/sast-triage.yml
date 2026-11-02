@@ -1,0 +1,89 @@
+# Dogfooding: the tool checks its own code on every pull request, every push to main, and once a week.
+# Add the repository secret ANTHROPIC_API_KEY to let Claude Haiku check the alerts.
+# Without it (or on pull requests from forks, which never get secrets) it runs scanner only and hides nothing.
+name: SAST Triage
+
+on:
+  pull_request:            # before a change is merged
+  push:
+    branches: [main]       # every change that lands on main, including direct pushes
+  schedule:
+    - cron: "0 6 * * 0"    # every Sunday 06:00 UTC (09:00 Bahrain), so nothing goes unchecked for long
+  workflow_dispatch:       # by hand from the Actions tab
+    inputs:
+      model:
+        description: "auto = Claude Haiku if the key is set, else scanner only"
+        type: choice
+        options: [auto, claude, sonnet, scanner]
+        default: auto
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-triage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEMGREP_RULES_COMMIT: 9bbf021d0acffa3095fcffd17b2bc7787eb4796d   # same pinned rules as the evaluation
+
+jobs:
+  triage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install the pinned packages
+        run: python -m pip install -r requirements.txt
+      - name: Get the pinned Semgrep community rules (Python only)
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/semgrep/semgrep-rules.git data/semgrep-rules
+          git -C data/semgrep-rules sparse-checkout set python
+          git -C data/semgrep-rules checkout --quiet "$SEMGREP_RULES_COMMIT"
+      - name: Scan and triage the tool's own code
+        env:
+          # The key is given to this one step only, and GitHub masks it in the log
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Inputs go through env, never straight into the script (prevents script injection)
+          MODEL: ${{ inputs.model || 'auto' }}
+          CODEREVIEW_EFFORT: low
+        run: >-
+          python -m codereview ci codereview
+          --model "$MODEL" --max-cost 0.50 --fail-on confirmed
+          --sarif-out sast-triage.sarif --summary "$GITHUB_STEP_SUMMARY"
+      - name: Keep the SARIF file and HTML report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: sast-triage-results
+          path: |
+            sast-triage.sarif
+            runs/*/report.html
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Optional: show results in the Security tab. Needs GitHub code scanning (free for public repositories;
+  # private ones need GitHub Advanced Security). Turn it on with the repository variable SAST_TRIAGE_CODE_SCANNING=true.
+  code-scanning:
+    needs: triage
+    if: always() && vars.SAST_TRIAGE_CODE_SCANNING == 'true' && needs.triage.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write   # only this small job may write security results
+      actions: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: sast-triage-results
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
+        with:
+          sarif_file: sast-triage.sarif
+          category: sast-triage

@@ -1,0 +1,71 @@
+# Reusable action: lets other repositories run SAST Triage on their pull requests.
+# Usage (once this repository is public):
+#   - uses: actions/checkout@<commit>
+#     with: {persist-credentials: false}
+#   - uses: zainab-nooh/llm-sast-triage@<tag or commit>
+#     with:
+#       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+name: SAST Triage
+description: Semgrep and Bandit alerts checked by an LLM. Only alerts it is confident are false alarms are hidden.
+author: Zainab Nooh
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  path:
+    description: Folder to scan, relative to the repository root
+    default: "."
+  model:
+    description: "auto (Claude Haiku if a key is given, else scanner only), claude, sonnet or scanner"
+    default: auto
+  max-cost:
+    description: Stop the AI at this many US$; alerts it did not reach are kept
+    default: "1.00"
+  fail-on:
+    description: "confirmed, review or never: which alerts fail the check"
+    default: confirmed
+  anthropic-api-key:
+    description: Your Anthropic API key, from a repository secret. Leave empty for scanner only.
+    required: false
+    default: ""
+
+outputs:
+  sarif-file:
+    description: Path of the SARIF file
+    value: ${{ steps.triage.outputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      with:
+        python-version: "3.12"
+    - name: Install SAST Triage
+      shell: bash
+      run: python -m pip install --quiet -r "$GITHUB_ACTION_PATH/requirements.txt"
+    - name: Get the pinned Semgrep community rules (Python only)
+      shell: bash
+      run: |
+        R="$GITHUB_ACTION_PATH/data/semgrep-rules"
+        if [ ! -d "$R/python" ]; then
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/semgrep/semgrep-rules.git "$R"
+          git -C "$R" sparse-checkout set python
+          git -C "$R" checkout --quiet 9bbf021d0acffa3095fcffd17b2bc7787eb4796d
+        fi
+    - name: Scan and triage
+      id: triage
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        TRIAGE_PATH: ${{ inputs.path }}
+        TRIAGE_MODEL: ${{ inputs.model }}
+        TRIAGE_MAX_COST: ${{ inputs.max-cost }}
+        TRIAGE_FAIL_ON: ${{ inputs.fail-on }}
+        CODEREVIEW_EFFORT: low
+      run: |
+        echo "sarif-file=$GITHUB_WORKSPACE/sast-triage.sarif" >> "$GITHUB_OUTPUT"
+        cd "$GITHUB_WORKSPACE"
+        PYTHONPATH="$GITHUB_ACTION_PATH" python -m codereview ci "$TRIAGE_PATH" \
+          --model "$TRIAGE_MODEL" --max-cost "$TRIAGE_MAX_COST" --fail-on "$TRIAGE_FAIL_ON" \
+          --sarif-out sast-triage.sarif --summary "$GITHUB_STEP_SUMMARY"

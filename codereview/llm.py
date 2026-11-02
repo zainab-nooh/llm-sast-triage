@@ -49,6 +49,14 @@ VERDICT_SCHEMA = {
 PRICES = {"claude-haiku-5-5": (0.10, 0.50), "claude-sonnet-5-5": (2.0, 10.0), "claude-opus-5-5": (4.0, 20.0)}
 
 
+
+def ollama_url() -> str:
+    """Where Ollama runs. Default: this computer. In Docker, compose.yaml sets CODEREVIEW_OLLAMA_URL to the host."""
+    url = os.environ.get("CODEREVIEW_OLLAMA_URL", "http://localhost:11434").rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("CODEREVIEW_OLLAMA_URL must start with http:// or https://")
+    return url
+
 def price(cfg: Config) -> Tuple[float, float]:
     if cfg.provider not in ("anthropic", "openai"):
         return 0.0, 0.0
@@ -127,7 +135,7 @@ def complete(system: str, user: str, cfg: Config) -> Tuple[str, int, int]:
                                              messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
         return r.choices[0].message.content, r.usage.prompt_tokens, r.usage.completion_tokens
     if p == "ollama":
-        req = urllib.request.Request("http://localhost:11434/api/chat", method="POST",
+        req = urllib.request.Request(ollama_url() + "/api/chat", method="POST",
                                      headers={"Content-Type": "application/json"},
                                      data=json.dumps({"model": cfg.model, "stream": False, "format": "json",
                                                       # Ollama's default context window (2048-4096 tokens) silently cuts long

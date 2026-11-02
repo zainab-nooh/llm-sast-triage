@@ -23,3 +23,5 @@ security_tests/
 .patch-backup-webapp/
 .patch-backup-report/
 .patch-backup-extras/
+.patch-backup-docker/
+.patch-backup-docker-fix/

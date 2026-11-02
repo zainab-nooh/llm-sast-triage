@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   run_id TEXT, finding_id TEXT, label TEXT, note TEXT, updated TEXT, PRIMARY KEY (run_id, finding_id)
 );
 CREATE TABLE IF NOT EXISTS run_status (run_id TEXT PRIMARY KEY, partial TEXT);
+CREATE INDEX IF NOT EXISTS results_by_run ON results (run_id);
 """
 
 
@@ -104,11 +105,13 @@ def list_runs(runs_dir: str) -> List[dict]:
     con = connect(runs_dir)
     out = []
     partial = dict(con.execute("SELECT run_id, partial FROM run_status").fetchall())
+    # One pass over the results table for all runs (fast even on a slow Docker folder link on Windows)
+    stats = {rid: rest for rid, *rest in con.execute(
+        "SELECT run_id, COUNT(*), SUM(json_extract(decision, '$.action') = 'suppress'), COALESCE(SUM(cost), 0), "
+        "COALESCE(SUM(seconds), 0) FROM results GROUP BY run_id")}
     for rid, created, conf in con.execute("SELECT id, created, config FROM runs ORDER BY created DESC").fetchall():
         c = json.loads(conf)
-        n, hidden, cost, secs = con.execute(
-            "SELECT COUNT(*), SUM(json_extract(decision, '$.action') = 'suppress'), COALESCE(SUM(cost), 0), "
-            "COALESCE(SUM(seconds), 0) FROM results WHERE run_id=?", (rid,)).fetchone()
+        n, hidden, cost, secs = stats.get(rid, (0, 0, 0, 0))
         out.append({"id": rid, "created": created[:16].replace("T", " "), "target": c.get("target", ""),
                     "provider": c.get("provider", ""), "model": "scanner only" if c.get("skip_judge") else c.get("model", ""),
                     "threshold": c.get("threshold"), "context_level": c.get("context_level"),

@@ -75,6 +75,34 @@ app, and the link holds a new session key each time you start it (do not share i
 
 The app uses the evaluated settings (context level 2, threshold 0.6) and the same pipeline as the command line.
 
+## 4c. Run it in Docker (no Python setup needed)
+
+You need Docker Desktop (Windows/macOS) or Docker Engine (Linux), running. From the project folder:
+
+```bash
+docker compose up --build          # first time builds the image (a few minutes), later starts are quick
+```
+
+Open the link printed in the log (`http://127.0.0.1:8765/#t=...`). Stop with Ctrl+C, or `docker compose down`.
+
+- **API key:** read from `.env` when the container starts. It is never copied into the image (`.dockerignore`
+  excludes it), so the image can be shared without leaking it. No `.env` = mock model and Ollama still work.
+- **Scanning a folder on your computer:** the container only sees the folder you hand it, read-only, as `/scan`.
+  Type `/scan` in the app's folder box. Choose the folder when you start:
+  `SCAN_DIR="C:/Users/you/projects/myapp" docker compose up` (use forward slashes on Windows).
+  Without `SCAN_DIR` it mounts `sample_target`.
+- **Public GitHub links** work as usual (git is inside the image).
+- **Results** are saved in `./runs` on your computer, so scan history survives restarts and is shared with
+  `python -m codereview serve`. Linux only: run `mkdir -p runs && chmod a+w runs` once (the app runs as user 10001).
+- **Ollama:** the container reaches Ollama on your computer at `host.docker.internal:11434`.
+- **After changing code or styling:** run `docker compose up --build` again so the image picks up the change.
+  While styling, `python -m codereview serve` is quicker (refresh the page to see edits).
+- Keep the port as 8765: the app only accepts requests addressed to `127.0.0.1:8765`.
+
+Safety settings in `compose.yaml`: the port is published on 127.0.0.1 only (not your network), the app runs as a
+normal user with no Linux capabilities, and the container file system is read-only except `/app/runs` and `/tmp`.
+Scanner rules come from the copy inside the image, so scans work without internet (except GitHub links and Claude).
+
 ## 5. Folder map
 
 | Path | What it is | Your job |

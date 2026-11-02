@@ -1,0 +1,24 @@
+# Start:  docker compose up --build      Stop: Ctrl+C (or docker compose down)
+# Then open the link printed in the log (it starts with http://127.0.0.1:8765/#t=...).
+services:
+  sast-triage:
+    build: .
+    image: sast-triage:local
+    ports:
+      - "127.0.0.1:8765:8765"          # this computer only, never the network
+    env_file:
+      - path: .env                     # your ANTHROPIC_API_KEY, read at run time (not copied into the image)
+        required: false
+    environment:
+      CODEREVIEW_OLLAMA_URL: http://host.docker.internal:11434   # Ollama running on your computer
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./runs:/app/runs               # scan history and reports stay in your project folder
+      - ${SCAN_DIR:-./sample_target}:/scan:ro   # a local folder to scan, read-only; in the app type /scan
+    read_only: true                    # the container can only write to /app/runs and /tmp
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true

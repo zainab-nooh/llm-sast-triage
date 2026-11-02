@@ -112,7 +112,9 @@ def inspect_cmd(file: str = typer.Argument(..., help="part of a file name, e.g. 
 
 @app.command("serve")
 def serve_cmd(port: int = typer.Option(8765, help="port on this computer"),
-              browser: bool = typer.Option(True, help="open the browser (--no-browser to only print the link)")):
+              browser: bool = typer.Option(True, help="open the browser (--no-browser to only print the link)"),
+              host: str = typer.Option("127.0.0.1", help="address to listen on; keep 127.0.0.1. Only the Docker image uses 0.0.0.0, "
+                                                        "and compose.yaml then publishes the port on 127.0.0.1 only")):
     """Start the web app on this computer only (127.0.0.1). Open the printed link; it holds this session's token."""
     import secrets
     import webbrowser
@@ -126,7 +128,7 @@ def serve_cmd(port: int = typer.Option(8765, help="port on this computer"),
     typer.echo(f"SAST Triage is running on this computer only.\nOpen this link (it contains your session key, do not share it):\n  {url}\nPress Ctrl+C to stop.")
     if browser:
         webbrowser.open(url)
-    uvicorn.run(create_app(token=token, port=port), host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(create_app(token=token, port=port), host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":

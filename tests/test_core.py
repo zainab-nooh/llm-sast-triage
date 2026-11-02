@@ -462,3 +462,19 @@ def test_a_counted_scan_can_be_cancelled(tmp_path, monkeypatch):
     assert client.post(f"/api/scans/{job['id']}/cancel", headers=h).json()["state"] == "cancelled"
     assert client.post(f"/api/scans/{job['id']}/start", headers=h).status_code == 409
     assert client.post("/api/scans", headers=h, json={"folder": TARGET, "cwes": ["CWE-89"], "model": "mock", "max_cost": -1}).status_code == 422
+
+
+def test_docker_settings(monkeypatch):
+    import pytest
+    """Docker extras: Ollama address from the environment, and error text on the page hides folders and keys."""
+    from codereview import llm
+    from codereview.server import _clean_error
+    monkeypatch.delenv("CODEREVIEW_OLLAMA_URL", raising=False)
+    assert llm.ollama_url() == "http://localhost:11434"
+    monkeypatch.setenv("CODEREVIEW_OLLAMA_URL", "http://host.docker.internal:11434/")
+    assert llm.ollama_url() == "http://host.docker.internal:11434"
+    monkeypatch.setenv("CODEREVIEW_OLLAMA_URL", "file:///etc/passwd")
+    with pytest.raises(ValueError):
+        llm.ollama_url()
+    msg = _clean_error(Exception("cannot open /home/zaina/secret/project/app.py with key sk-ant-api03-ABCDEFGHIJ"))
+    assert "zaina" not in msg and "ABCDEFGHIJ" not in msg and "app.py" in msg

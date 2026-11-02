@@ -39,6 +39,17 @@ from . import llm, pipeline, policy, report, store
 from .report import CWES, project_name
 from .config import ROOT, Config
 
+
+def _clean_error(e: Exception) -> str:
+    """Short error text for the page: folder paths cut to the last part, keys and tokens masked.
+    The full error still goes to the terminal log (traceback) for the owner."""
+    text = str(e)[:300]
+    text = re.sub(r"(sk-ant-[A-Za-z0-9_-]{3})[A-Za-z0-9_-]+", r"\1...", text)        # API keys
+    text = re.sub(r"(?i)(token|key|password)=\S+", r"\1=...", text)
+    text = re.sub(r"(?:[A-Za-z]:)?(?:[\\/][^\\/\s'\":]+){2,}[\\/]([^\\/\s'\":]+)", r".../\1", text)  # /a/b/c/file -> .../file
+    return text
+
+
 WEB = Path(__file__).parent / "web"
 CONTEXT_LEVEL, THRESHOLD = 2, 0.6          # the settings frozen for the evaluation
 FALLBACK_CALL_COST = 0.003                 # dollars per Claude call when there are no earlier runs to average
@@ -170,7 +181,7 @@ class Jobs:
                 self.update(jid, state="counting", commit=commit)
             except Exception as e:
                 traceback.print_exc()
-                self.update(jid, state="error", error=f"Could not download the repository (is it public, and is the branch or commit right?): {str(e)[:300]}")
+                self.update(jid, state="error", error=f"Could not download the repository (is it public, and is the branch or commit right?): {_clean_error(e)}")
                 return
         try:
             scan_dir = Path(self.runs_dir) / "app-scans" / f"{datetime.now():%Y%m%d-%H%M%S}-{jid}"
@@ -197,7 +208,7 @@ class Jobs:
                         bandit=str(bandit) if bandit else None)
         except Exception as e:     # show the person what went wrong instead of hanging
             traceback.print_exc()
-            self.update(jid, state="error", error=f"The scanners failed: {type(e).__name__}: {str(e)[:300]}")
+            self.update(jid, state="error", error=f"The scanners failed: {type(e).__name__}: {_clean_error(e)}")
 
     def start(self, jid: str) -> dict:
         job = self.get(jid)
@@ -239,7 +250,7 @@ class Jobs:
                             partial=store.partial_reason(self.runs_dir, run_id))
             except Exception as e:
                 traceback.print_exc()
-                self.update(jid, state="error", error=f"The AI check stopped: {type(e).__name__}: {str(e)[:300]}")
+                self.update(jid, state="error", error=f"The AI check stopped: {type(e).__name__}: {_clean_error(e)}")
 
     def cancel(self, jid: str) -> dict:
         job = self.get(jid)
@@ -322,10 +333,10 @@ def resolve_folder(text: str) -> Optional[Path]:
 
 
 # ------------------------------------------------------------------ data for the page
-def latest_runs(runs_dir: str) -> List[dict]:
+def latest_runs(runs_dir: str, rows: Optional[List[dict]] = None) -> List[dict]:
     """The newest run of each scanned folder: what the dashboard and the issue list show by default."""
     seen, out = set(), []
-    for r in store.list_runs(runs_dir):
+    for r in (rows if rows is not None else store.list_runs(runs_dir)):
         if r["target"] in seen:
             continue
         seen.add(r["target"])
@@ -492,10 +503,11 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
 
     @app.get("/api/runs")
     def runs():
-        latest = {r["id"] for r in latest_runs(runs_dir)}
+        rows = store.list_runs(runs_dir)
+        latest = {r["id"] for r in latest_runs(runs_dir, rows)}
         return [dict(r, project=project_name(r["target"]), latest=r["id"] in latest,
                      model="mock" if r["provider"] == "mock" and r["model"] != "scanner only" else r["model"])
-                for r in store.list_runs(runs_dir)]
+                for r in rows]
 
     @app.get("/api/issues")
     def issues(run: Optional[str] = None):

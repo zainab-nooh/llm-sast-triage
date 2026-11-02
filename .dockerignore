@@ -1,0 +1,20 @@
+# Never copy secrets, results or local environments into the image
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+runs/
+.git/
+.github/
+.pytest_cache/
+**/__pycache__/
+*.sarif
+bandit.json
+security_tests/
+.patch-backup-*/
+# data: keep only the offline Semgrep Python rules the scanner needs
+data/*
+!data/semgrep-rules/
+data/semgrep-rules/*
+!data/semgrep-rules/python/

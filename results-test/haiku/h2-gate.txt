@@ -1,0 +1,24 @@
+Run 20261102-144610, CWE-89, threshold 0.6: 3 real files, 6 false-alarm files
+  verdict alone   false alarms removed 6/6   real lost 0/3
+  verdict + conf  false alarms removed 6/6   real lost 0/3
+  full gate       false alarms removed 6/6   real lost 0/3
+Run 20261102-144820, CWE-78, threshold 0.6: 7 real files, 4 false-alarm files
+  verdict alone   false alarms removed 3/4   real lost 0/7
+  verdict + conf  false alarms removed 3/4   real lost 0/7
+  full gate       false alarms removed 3/4   real lost 0/7
+Run 20261102-145035, CWE-95, threshold 0.6: 10 real files, 16 false-alarm files
+  verdict alone   false alarms removed 14/16   real lost 0/10
+  verdict + conf  false alarms removed 14/16   real lost 0/10
+  full gate       false alarms removed 14/16   real lost 0/10
+Run 20261102-145327, CWE-502, threshold 0.6: 9 real files, 6 false-alarm files
+  verdict alone   false alarms removed 4/6   real lost 0/9
+  verdict + conf  false alarms removed 4/6   real lost 0/9
+  full gate       false alarms removed 4/6   real lost 0/9
+Run 20261102-145523, CWE-611, threshold 0.6: 4 real files, 10 false-alarm files
+  verdict alone   false alarms removed 9/10   real lost 0/4
+  verdict + conf  false alarms removed 9/10   real lost 0/4
+  full gate       false alarms removed 9/10   real lost 0/4
+Run 20261102-145727, CWE-614, threshold 0.6: 12 real files, 7 false-alarm files
+  verdict alone   false alarms removed 7/7   real lost 0/12
+  verdict + conf  false alarms removed 7/7   real lost 0/12
+  full gate       false alarms removed 7/7   real lost 0/12

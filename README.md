@@ -210,11 +210,12 @@ B=data/benchmark-python
 python -m codereview run $B/testcode --scanner-only
 python -m codereview evaluate data/splits/dev.csv
 
-# SAST Triage on the dev half (set CODEREVIEW_EFFORT=low in .env)
-python -m codereview run $B/testcode --only-scored data/splits/dev.csv \
-    --provider anthropic --model claude-haiku-5-5 --context 2 --threshold 0.6 \
-    --cwe CWE-89 --cwe CWE-78 --cwe CWE-95 --cwe CWE-502 --cwe CWE-611 --cwe CWE-614
-python -m codereview evaluate data/splits/dev.csv
+# SAST Triage on the dev half, one weakness type at a time (as in the thesis; CODEREVIEW_EFFORT=low in .env)
+for C in CWE-89 CWE-78 CWE-95 CWE-502 CWE-611 CWE-614; do
+  python -m codereview run $B/testcode --provider anthropic --model claude-haiku-5-5 --context 2 --threshold 0.6 \
+      --helpers $B/helpers --only-scored data/splits/dev.csv --cwe $C
+  python -m codereview evaluate data/splits/dev.csv --threshold 0.6 --cwe $C
+done
 python -m codereview sweep data/splits/dev.csv              # results at other thresholds
 
 # Baseline: the same model on whole files, no scanner, slice, rubric or gate
@@ -223,7 +224,7 @@ python scripts/ai_alone.py data/splits/dev.csv anthropic claude-haiku-5-5
 
 `--only-scored` judges only alerts the answer key can score, so you do not pay for the rest. The split
 (`data/splits/`, made once by `scripts/make_split.py` with a fixed seed) is stratified by category and answer.
-**Tune on `dev.csv` only.** `test.csv` is for the final run with frozen settings.
+**Tune on `dev.csv` only.** `test.csv` is for the final run with frozen settings (`scripts/final_run.sh`).
 
 Helper scripts: `why_kept.py` and `why_lost.py` explain individual results, `compare_gate.py` compares gate
 settings, `make_injection_tests.py` and `injection_result.py` run the prompt-injection test, and `check_secrets.py`
@@ -309,6 +310,7 @@ Set a monthly spending limit in the Claude Console before using a real key.
 - Built with Semgrep, Bandit, the OWASP Benchmark for Python, FastAPI and Claude.
 - AI assistance (Claude) was used for parts of the code and documentation, as declared in the thesis.
 - No licence has been chosen yet; all rights reserved until the repository is made public.
+
 
 ## Contact
 

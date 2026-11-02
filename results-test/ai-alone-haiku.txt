@@ -1,0 +1,126 @@
+1/106 BenchmarkTest00012 CWE-89 real=false -> likely_false_positive
+2/106 BenchmarkTest00017 CWE-611 real=false -> confirmed
+3/106 BenchmarkTest00066 CWE-614 real=true -> confirmed
+4/106 BenchmarkTest00073 CWE-94 real=false -> likely_false_positive
+5/106 BenchmarkTest00078 CWE-502 real=true -> confirmed
+6/106 BenchmarkTest00080 CWE-502 real=false -> likely_false_positive
+7/106 BenchmarkTest00099 CWE-89 real=true -> confirmed
+8/106 BenchmarkTest00158 CWE-94 real=false -> likely_false_positive
+9/106 BenchmarkTest00159 CWE-94 real=true -> confirmed
+10/106 BenchmarkTest00160 CWE-94 real=true -> confirmed
+11/106 BenchmarkTest00161 CWE-94 real=true -> confirmed
+12/106 BenchmarkTest00162 CWE-94 real=false -> likely_false_positive
+13/106 BenchmarkTest00163 CWE-94 real=false -> uncertain
+14/106 BenchmarkTest00164 CWE-502 real=true -> confirmed
+15/106 BenchmarkTest00165 CWE-78 real=true -> confirmed
+16/106 BenchmarkTest00166 CWE-78 real=true -> confirmed
+17/106 BenchmarkTest00205 CWE-611 real=true -> confirmed
+18/106 BenchmarkTest00264 CWE-94 real=false -> likely_false_positive
+19/106 BenchmarkTest00269 CWE-502 real=true -> confirmed
+20/106 BenchmarkTest00283 CWE-89 real=true -> confirmed
+21/106 BenchmarkTest00285 CWE-89 real=false -> likely_false_positive
+22/106 BenchmarkTest00286 CWE-89 real=false -> likely_false_positive
+23/106 BenchmarkTest00287 CWE-89 real=false -> likely_false_positive
+24/106 BenchmarkTest00292 CWE-611 real=false -> confirmed
+25/106 BenchmarkTest00342 CWE-94 real=true -> confirmed
+26/106 BenchmarkTest00345 CWE-94 real=false -> likely_false_positive
+27/106 BenchmarkTest00349 CWE-502 real=false -> likely_false_positive
+28/106 BenchmarkTest00350 CWE-78 real=false -> likely_false_positive
+29/106 BenchmarkTest00416 CWE-614 real=false -> likely_false_positive
+30/106 BenchmarkTest00422 CWE-94 real=true -> confirmed
+31/106 BenchmarkTest00423 CWE-94 real=false -> likely_false_positive
+32/106 BenchmarkTest00424 CWE-94 real=false -> confirmed
+33/106 BenchmarkTest00425 CWE-94 real=true -> confirmed
+34/106 BenchmarkTest00431 CWE-78 real=true -> confirmed
+35/106 BenchmarkTest00454 CWE-89 real=true -> confirmed
+36/106 BenchmarkTest00459 CWE-611 real=false -> likely_false_positive
+37/106 BenchmarkTest00460 CWE-611 real=true -> confirmed
+38/106 BenchmarkTest00508 CWE-502 real=false -> likely_false_positive
+39/106 BenchmarkTest00509 CWE-502 real=false -> likely_false_positive
+40/106 BenchmarkTest00511 CWE-78 real=true -> confirmed
+41/106 BenchmarkTest00514 CWE-502 real=false -> likely_false_positive
+42/106 BenchmarkTest00539 CWE-611 real=false -> confirmed
+43/106 BenchmarkTest00540 CWE-611 real=false -> likely_false_positive
+44/106 BenchmarkTest00592 CWE-614 real=true -> confirmed
+45/106 BenchmarkTest00593 CWE-614 real=true -> confirmed
+46/106 BenchmarkTest00595 CWE-614 real=false -> likely_false_positive
+47/106 BenchmarkTest00602 CWE-94 real=false -> likely_false_positive
+48/106 BenchmarkTest00605 CWE-502 real=true -> confirmed
+49/106 BenchmarkTest00607 CWE-78 real=true -> confirmed
+50/106 BenchmarkTest00609 CWE-502 real=false -> likely_false_positive
+51/106 BenchmarkTest00651 CWE-614 real=true -> confirmed
+52/106 BenchmarkTest00652 CWE-614 real=true -> confirmed
+53/106 BenchmarkTest00657 CWE-502 real=true -> confirmed
+54/106 BenchmarkTest00660 CWE-502 real=false -> likely_false_positive
+55/106 BenchmarkTest00678 CWE-611 real=false -> confirmed
+56/106 BenchmarkTest00679 CWE-611 real=false -> confirmed
+57/106 BenchmarkTest00718 CWE-614 real=true -> confirmed
+58/106 BenchmarkTest00721 CWE-614 real=false -> likely_false_positive
+59/106 BenchmarkTest00729 CWE-94 real=true -> confirmed
+60/106 BenchmarkTest00736 CWE-78 real=false -> likely_false_positive
+61/106 BenchmarkTest00755 CWE-89 real=false -> likely_false_positive
+62/106 BenchmarkTest00759 CWE-611 real=false -> likely_false_positive
+63/106 BenchmarkTest00808 CWE-614 real=true -> confirmed
+64/106 BenchmarkTest00811 CWE-614 real=false -> likely_false_positive
+65/106 BenchmarkTest00812 CWE-614 real=false -> likely_false_positive
+66/106 BenchmarkTest00813 CWE-614 real=false -> likely_false_positive
+67/106 BenchmarkTest00818 CWE-94 real=false -> uncertain
+68/106 BenchmarkTest00820 CWE-94 real=true -> confirmed
+69/106 BenchmarkTest00821 CWE-94 real=false -> confirmed
+70/106 BenchmarkTest00825 CWE-502 real=true -> confirmed
+71/106 BenchmarkTest00827 CWE-502 real=true -> confirmed
+72/106 BenchmarkTest00828 CWE-502 real=false -> likely_false_positive
+73/106 BenchmarkTest00885 CWE-614 real=true -> confirmed
+74/106 BenchmarkTest00886 CWE-614 real=true -> confirmed
+75/106 BenchmarkTest00891 CWE-94 real=true -> confirmed
+76/106 BenchmarkTest00892 CWE-94 real=false -> uncertain
+77/106 BenchmarkTest00893 CWE-94 real=false -> likely_false_positive
+78/106 BenchmarkTest00899 CWE-78 real=true -> confirmed
+79/106 BenchmarkTest00903 CWE-502 real=false -> likely_false_positive
+80/106 BenchmarkTest00904 CWE-502 real=false -> likely_false_positive
+81/106 BenchmarkTest00930 CWE-611 real=true -> confirmed
+82/106 BenchmarkTest00931 CWE-611 real=true -> confirmed
+83/106 BenchmarkTest00980 CWE-614 real=true -> confirmed
+84/106 BenchmarkTest00986 CWE-94 real=true -> confirmed
+85/106 BenchmarkTest00987 CWE-94 real=false -> likely_false_positive
+86/106 BenchmarkTest00989 CWE-94 real=false -> uncertain
+87/106 BenchmarkTest00993 CWE-502 real=true -> confirmed
+88/106 BenchmarkTest00994 CWE-502 real=true -> confirmed
+89/106 BenchmarkTest00995 CWE-502 real=false -> likely_false_positive
+90/106 BenchmarkTest00996 CWE-502 real=false -> likely_false_positive
+91/106 BenchmarkTest00998 CWE-502 real=false -> likely_false_positive
+92/106 BenchmarkTest01024 CWE-611 real=false -> likely_false_positive
+93/106 BenchmarkTest01088 CWE-614 real=true -> confirmed
+94/106 BenchmarkTest01090 CWE-614 real=false -> likely_false_positive
+95/106 BenchmarkTest01096 CWE-502 real=false -> confirmed
+96/106 BenchmarkTest01098 CWE-78 real=false -> likely_false_positive
+97/106 BenchmarkTest01100 CWE-502 real=false -> likely_false_positive
+98/106 BenchmarkTest01101 CWE-502 real=false -> likely_false_positive
+99/106 BenchmarkTest01122 CWE-611 real=false -> confirmed
+100/106 BenchmarkTest01166 CWE-94 real=false -> confirmed
+101/106 BenchmarkTest01172 CWE-502 real=false -> confirmed
+102/106 BenchmarkTest01173 CWE-78 real=false -> uncertain
+103/106 BenchmarkTest01187 CWE-614 real=true -> confirmed
+104/106 BenchmarkTest01191 CWE-78 real=true -> confirmed
+105/106 BenchmarkTest01203 CWE-89 real=false -> likely_false_positive
+106/106 BenchmarkTest01228 CWE-502 real=false -> likely_false_positive
+
+AI alone, anthropic claude-haiku-5-5, 106 files, 429 s, $0.055. Saved: C:\Users\zaina\CLP Project\Version-3\llm-sast-triage\runs\ai_alone-20261102-153943.jsonl
+
+flag unless false positive:   CWE   real found  real missed  safe flagged  safe cleared  precision  recall
+     89           3            0             0             6      1.000   1.000
+     78           7            0             1             3      0.875   1.000
+     94          10            0             7             9      0.588   1.000
+    502           9            0             2            16      0.818   1.000
+    611           4            0             6             4      0.400   1.000
+    614          12            0             0             7      1.000   1.000
+    all          45            0            16            45      0.738   1.000
+
+confirmed only:   CWE   real found  real missed  safe flagged  safe cleared  precision  recall
+     89           3            0             0             6      1.000   1.000
+     78           7            0             0             4      1.000   1.000
+     94          10            0             3            13      0.769   1.000
+    502           9            0             2            16      0.818   1.000
+    611           4            0             6             4      0.400   1.000
+    614          12            0             0             7      1.000   1.000
+    all          45            0            11            50      0.804   1.000

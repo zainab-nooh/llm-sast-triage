@@ -1,0 +1,18 @@
+
+Threshold 0.6:  CWE      scanner FP  removed  real  lost  precision(tool)
+   CWE-502           6        5     9     0        0.9
+   CWE-611          10        9     4     0        0.8
+   CWE-614           7        7    12     0        1.0
+    CWE-78           4        3     7     0      0.875
+    CWE-89           6        6     3     0        1.0
+    CWE-95          16       16    10     0        1.0
+     TOTAL          49       46    45     0      0.938   (scanner precision 0.479; AI cost $0.992; 508 s)
+
+Threshold 0.8:  CWE      scanner FP  removed  real  lost  precision(tool)
+   CWE-502           6        5     9     0        0.9
+   CWE-611          10        7     4     0      0.571
+   CWE-614           7        7    12     0        1.0
+    CWE-78           4        3     7     0      0.875
+    CWE-89           6        6     3     0        1.0
+    CWE-95          16       16    10     0        1.0
+     TOTAL          49       44    45     0        0.9   (scanner precision 0.479; AI cost $0.992; 508 s)

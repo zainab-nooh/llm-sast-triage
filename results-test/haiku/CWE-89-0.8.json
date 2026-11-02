@@ -1,0 +1,26 @@
+{
+  "scanner_only": {
+    "tp": 3,
+    "fp": 6,
+    "fn": 0,
+    "tn": 0,
+    "precision": 0.333,
+    "recall": 1.0,
+    "f1": 0.5,
+    "f2": 0.714
+  },
+  "pipeline": {
+    "tp": 3,
+    "fp": 0,
+    "fn": 0,
+    "tn": 6,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "f2": 1.0
+  },
+  "false_positives_removed": 1.0,
+  "real_findings_lost": 0.0,
+  "cost": 0.0052,
+  "seconds": 45.1
+}

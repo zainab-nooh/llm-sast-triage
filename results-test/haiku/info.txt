@@ -1,0 +1,11 @@
+model=claude-haiku-5-5
+commit=061dcac
+tag=v0.2-full-tool-4-g061dcac
+started=Mon, Nov  2, 2026  2:46:09 PM
+CWE-89 run=20261102-144610
+CWE-78 run=20261102-144820
+CWE-95 run=20261102-145035
+CWE-502 run=20261102-145327
+CWE-611 run=20261102-145523
+CWE-614 run=20261102-145727
+finished=Mon, Nov  2, 2026  2:59:31 PM

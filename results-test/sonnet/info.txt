@@ -1,0 +1,11 @@
+model=claude-sonnet-5-5
+commit=061dcac
+tag=v0.2-full-tool-4-g061dcac
+started=Mon, Nov  2, 2026  3:20:30 PM
+CWE-89 run=20261102-152032
+CWE-78 run=20261102-152243
+CWE-95 run=20261102-152505
+CWE-502 run=20261102-152844
+CWE-611 run=20261102-153133
+CWE-614 run=20261102-153413
+finished=Mon, Nov  2, 2026  3:37:07 PM

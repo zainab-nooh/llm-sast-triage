@@ -28,3 +28,4 @@ security_tests/
 .patch-backup-action/
 !tests/fixtures/semgrep.sarif
 !tests/fixtures/bandit.json
+.patch-backup-readme/

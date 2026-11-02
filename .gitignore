@@ -25,3 +25,4 @@ security_tests/
 .patch-backup-extras/
 .patch-backup-docker/
 .patch-backup-docker-fix/
+.patch-backup-action/

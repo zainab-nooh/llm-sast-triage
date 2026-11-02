@@ -103,6 +103,29 @@ Safety settings in `compose.yaml`: the port is published on 127.0.0.1 only (not 
 normal user with no Linux capabilities, and the container file system is read-only except `/app/runs` and `/tmp`.
 Scanner rules come from the copy inside the image, so scans work without internet (except GitHub links and Claude).
 
+## 4d. Use it in CI (GitHub Actions)
+
+`python -m codereview ci <folder>` is the pipeline version of a scan. It uses the evaluated settings (level 2,
+threshold 0.6, effort low), writes `sast-triage.sarif`, adds a summary to the run page, marks Confirmed (error) and
+Needs review (warning) alerts on the pull request's files, and exits with 1 when alerts match `--fail-on`
+(`confirmed` by default; `review` or `never`). Without `ANTHROPIC_API_KEY` it runs scanner only and hides nothing.
+`--max-cost` (default US$1) stops the AI; alerts it did not reach are kept.
+
+This repository has two workflows in `.github/workflows/`:
+- **Tests:** `pip check` and `pytest` on every push to main and every pull request.
+- **SAST Triage:** checks the tool's own `codereview/` code on every pull request (and by hand from the Actions tab).
+  To let Claude Haiku check the alerts, add the secret: Settings > Secrets and variables > Actions > New repository
+  secret, name `ANTHROPIC_API_KEY`. Results: the run's summary page, annotations on the pull request, and the
+  `sast-triage-results` artifact (SARIF + HTML report). To also fill the Security tab, set the repository variable
+  `SAST_TRIAGE_CODE_SCANNING` to `true` (needs GitHub code scanning: free for public repositories).
+
+Other repositories can use `action.yml` once this repository is public (see the example at the top of that file).
+
+Security choices: actions are pinned to full commit ids, every job gets read-only permissions (only the optional
+upload job may write security results), the key is given to one step only, workflow inputs reach scripts through
+environment variables (no script injection), checkout does not keep the GitHub token, and the workflow uses
+`pull_request`, so pull requests from forks never see the secret.
+
 ## 5. Folder map
 
 | Path | What it is | Your job |

@@ -26,3 +26,5 @@ security_tests/
 .patch-backup-docker/
 .patch-backup-docker-fix/
 .patch-backup-action/
+!tests/fixtures/semgrep.sarif
+!tests/fixtures/bandit.json

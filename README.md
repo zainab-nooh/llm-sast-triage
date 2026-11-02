@@ -309,3 +309,9 @@ Set a monthly spending limit in the Claude Console before using a real key.
 - Built with Semgrep, Bandit, the OWASP Benchmark for Python, FastAPI and Claude.
 - AI assistance (Claude) was used for parts of the code and documentation, as declared in the thesis.
 - No licence has been chosen yet; all rights reserved until the repository is made public.
+
+## Contact
+
+
+
+📧 [zain3b.nooh@gmail.com](mailto:zain3b.nooh@gmail.com) · 💼 [LinkedIn](https://www.linkedin.com/in/zainab-h-nooh/) · 💻 [GitHub](https://github.com/zainab-nooh)

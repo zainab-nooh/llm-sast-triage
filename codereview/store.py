@@ -21,10 +21,20 @@ CREATE INDEX IF NOT EXISTS results_by_run ON results (run_id);
 """
 
 
+_READY = set()   # databases whose tables were already created by this process
+
+
 def connect(runs_dir: str) -> sqlite3.Connection:
+    db = Path(runs_dir) / "results.db"
+    key = str(db.resolve())
+    if key in _READY and db.exists():
+        return sqlite3.connect(db)
+    # First use: create the tables. This needs a write lock, so it is done once, not on every read
+    # (it made each page load wait, most of all on Windows and on a Docker folder link).
     Path(runs_dir).mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(Path(runs_dir) / "results.db")
+    con = sqlite3.connect(db)
     con.executescript(SCHEMA)
+    _READY.add(key)
     return con
 
 

@@ -375,9 +375,9 @@ def fingerprints(rows: List[dict], target: str = "") -> dict:
     return out
 
 
-def previous_run(runs_dir: str, run_id: str) -> Optional[str]:
+def previous_run(runs_dir: str, run_id: str, runs: Optional[List[dict]] = None) -> Optional[str]:
     """The scan of the same folder just before this one (complete scans only)."""
-    runs = store.list_runs(runs_dir)                     # newest first
+    runs = runs if runs is not None else store.list_runs(runs_dir)   # newest first
     ids = [r["id"] for r in runs]
     if run_id not in ids:
         return None
@@ -390,13 +390,14 @@ def previous_run(runs_dir: str, run_id: str) -> Optional[str]:
 
 def issues_for(runs_dir: str, run_ids: List[str]) -> List[dict]:
     out = []
+    runs = store.list_runs(runs_dir)          # read once, not once per scan
     for rid in run_ids:
         cfg = store.load_config(runs_dir, rid)
         target = cfg.get("target", "")
         project = project_name(target)
         reviews = store.load_reviews(runs_dir, rid)
         rows = store.load_run(runs_dir, rid)
-        prev = previous_run(runs_dir, rid)
+        prev = previous_run(runs_dir, rid, runs)
         keys = fingerprints(rows, target) if prev else {}
         old = set(fingerprints(store.load_run(runs_dir, prev), target).values()) if prev else set()
         for row in rows:

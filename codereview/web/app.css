@@ -281,3 +281,52 @@ tbody tr.sel{background:var(--accent-soft)}
 tr.cmp-why td{background:var(--surface-2)}
 .grid-2.even{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:760px){.grid-2.even{grid-template-columns:minmax(0,1fr)}}
+/* phone layout: compact header, scrollable page tabs, tables as stacked cards, no squeezed boxes */
+tr.grp td{background:var(--surface-2);font-weight:700;color:var(--ink);font-size:12.5px;letter-spacing:.02em;padding-top:9px;padding-bottom:9px}
+tr.grp td .sub{font-weight:500;margin-left:8px}
+tbody tr.grp{cursor:default}
+tbody tr.grp:hover{background:transparent}
+@media (max-width:760px){
+  .top{position:static;gap:8px 10px;padding-block:10px}
+  .top>div:first-child{flex:1 1 0;min-width:0}
+  .top .crumb{display:none}
+  :root .top h1{font-size:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top .spacer{display:none}
+  .top .search{order:5;flex:1 1 100%}
+  .top .btn{padding:7px 10px}
+  .theme-btn{width:34px;height:34px}
+  .mobile-nav{order:6;padding:2px 0 0;scrollbar-width:none;-webkit-mask:linear-gradient(90deg,#000 85%,transparent);mask:linear-gradient(90deg,#000 85%,transparent)}
+  .mobile-nav::-webkit-scrollbar{display:none}
+  .mobile-nav a:last-child{margin-right:28px}
+  :root .content{padding-block:16px 40px;gap:16px}
+  .panel-h{flex-wrap:wrap;padding:12px 14px;row-gap:4px}
+  .panel-h .sub{flex:1 1 100%;order:2}
+  .panel-h .spacer{display:none}
+  .panel-h>.btn,.panel-h>div:not(.spacer){order:3}
+  .filters{padding:10px 14px}
+  .filters>span[style]{display:none}
+  .filters select.sel{flex:1 1 140px;min-width:0}
+  .preview-note{flex-wrap:wrap;align-items:flex-start;gap:4px 8px}
+  .preview-note b{white-space:normal}
+  /* tables become one card per row; each cell shows its column name (data-label, set by app.js) */
+  .table-wrap{overflow:visible}
+  .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:100%}
+  .table-wrap thead{display:none}
+  .table-wrap tbody tr{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 12px}
+  .table-wrap td{border:0;padding:0;min-width:0;display:grid;gap:1px;align-content:start;justify-items:start}
+  .table-wrap td[data-label]:not([data-label=""])::before{content:attr(data-label);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  .table-wrap td.wide,.table-wrap td:has(.title-cell),.table-wrap td:has(.row-actions){grid-column:1 / -1}
+  .table-wrap td:has(.row-actions)::before{display:none}
+  .row-actions{justify-content:flex-start}
+  .title-cell{min-width:0}
+  .title-cell span{word-break:break-all}
+  .table-wrap tbody tr.grp{display:block;padding:8px 14px;background:var(--surface-2)}
+  .table-wrap tr.grp td::before{display:none}
+  .table-wrap tr.cmp-why{display:block}
+  /* issue drawer: the decision box scrolls with the details instead of covering the screen */
+  .drawer{overflow:auto}
+  .drawer-b{flex:none;overflow:visible;padding:14px 16px}
+  .drawer-h,.decide{padding-left:16px;padding-right:16px}
+  .tabs{padding:0 16px;overflow-x:auto}
+  .modal{padding-block:10px}
+}

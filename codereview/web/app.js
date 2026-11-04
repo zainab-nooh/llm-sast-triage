@@ -270,11 +270,15 @@ function viewReport(){
   ISSUES.forEach(i=>{ const o=(CWE[i.cwe]||{}).owasp||'Not mapped'; cats[o]=cats[o]||{}; cats[o][i.cwe]=cats[o][i.cwe]||{open:0,review:0,ign:0,total:0};
     const x=cats[o][i.cwe]; x.total++; if(i.group==='Hidden') x.ign++; else if(needsReview(i)) x.review++; if(isOpen(i)) x.open++; });
   const t=el('tbody');
-  Object.keys(cats).sort().forEach(o=>Object.entries(cats[o]).forEach(([c,x],k)=>t.append(el('tr',{},
-    el('td',{text:k===0?o:''}),el('td',{},el('span',{class:'tag',text:c}),' ',cweName(c)),el('td',{text:(CWE[c]||{}).rule||'none'}),
-    el('td',{text:x.total}),el('td',{text:x.open}),el('td',{text:x.review}),el('td',{text:x.ign})))));
+  // one shaded heading row per OWASP category, then its weakness types (no blank category cells)
+  Object.keys(cats).sort((a,b)=>(a==='Not mapped')-(b==='Not mapped')||a.localeCompare(b)).forEach(o=>{
+    const rows=Object.entries(cats[o]), n=rows.reduce((s,[,x])=>s+x.total,0);
+    t.append(el('tr',{class:'grp'},el('td',{colspan:6},o,el('span',{class:'sub',text:`${rows.length} type${rows.length>1?'s':''} · ${n} alert${n>1?'s':''}`}))));
+    rows.forEach(([c,x])=>t.append(el('tr',{},
+      el('td',{class:'wide'},el('span',{class:'tag',text:c}),' ',cweName(c)),el('td',{text:(CWE[c]||{}).rule||'none'}),
+      el('td',{text:x.total}),el('td',{text:x.open}),el('td',{text:x.review}),el('td',{text:x.ign}))));});
   v.append(panel('Issues by OWASP Top 10:2025 category and CWE','from the policy file (policy/policy.yaml)',
-    el('div',{class:'table-wrap'},el('table',{},el('thead',{},el('tr',{},...['OWASP category','Weakness (CWE)','Policy rule','Alerts','Open','Needs review','Auto-ignored'].map(h=>el('th',{text:h})))),t))));
+    el('div',{class:'table-wrap'},el('table',{},el('thead',{},el('tr',{},...['Weakness (CWE)','Policy rule','Alerts','Open','Needs review','Auto-ignored'].map(h=>el('th',{text:h})))),t))));
 }
 
 /* ---------------- Projects ---------------- */
@@ -476,18 +480,34 @@ function viewIntegrations(){
 const PAGES={dashboard:viewDashboard,issues:viewIssues,report:viewReport,projects:viewProjects,scans:viewScans,compare:viewCompare,config:viewConfig,integrations:viewIntegrations};
 function route(){
   if(!STATUS) return;
+  if(LOADING){ showLoading(); return; }
   const p=(location.hash||'#dashboard').slice(1); const page=PAGES[p]?p:'dashboard';
   document.querySelectorAll('.nav a[data-page]').forEach(a=>a.classList.toggle('on',a.dataset.page===page||(page==='report'&&a.dataset.page==='dashboard')));
   const m=$('#mnav'); m.replaceChildren(...['dashboard','issues','projects','scans','compare','config','integrations'].map(k=>el('a',{href:'#'+k,class:k===page?'on':'',text:{dashboard:'Dashboard',issues:'Issues',projects:'Projects',scans:'Scans',compare:'Compare',config:'Settings',integrations:'GitHub'}[k]})));
+  const on=m.querySelector('a.on'); if(on) m.scrollLeft=on.offsetLeft-m.offsetLeft-(m.clientWidth-on.offsetWidth)/2;
   $('#navOpen').textContent=ISSUES.filter(isOpen).length;
   PAGES[page]();
 }
-async function refreshData(){ try{ await load(); }catch(e){ if(e.message!=='no token') toast(e.message); } if(!$('#layer').children.length) route(); }
-async function refresh(page){ await refreshData(); if(page&&location.hash!=='#'+page) location.hash='#'+page; else route(); $('.main').scrollTop=0; }
+let LOADING=false, LOADED_RUN;          // LOADED_RUN: the state.run the data in memory was loaded for
+function showLoading(){ $('#view').replaceChildren(el('div',{class:'panel'},el('div',{class:'empty'},el('div',{class:'prog indet',style:'max-width:220px;margin:0 auto 10px'},el('span')),'Loading…'))); }
+async function refreshData(){ LOADING=true; try{ await load(); LOADED_RUN=state.run; }catch(e){ if(e.message!=='no token') toast(e.message); } LOADING=false; if(!$('#layer').children.length) route(); }
+/* Go to a page at once (with a loading note), then fetch fresh data once and draw it once.
+   If the data in memory is already for this view (e.g. a scan just finished and was loaded), skip the fetch. */
+async function refresh(page){
+  const fresh=STATUS&&LOADED_RUN===state.run&&page&&!refresh.force;
+  if(page&&location.hash!=='#'+page){ if(!fresh) LOADING=true; location.hash='#'+page; }
+  $('.main').scrollTop=0;
+  if(fresh){ route(); return; }
+  showLoading(); await refreshData();
+}
 function noToken(){
   $('#view').replaceChildren(el('div',{class:'panel'},el('div',{class:'panel-b welcome'},el('h2',{text:'Open the app from its start link'}),
     el('p',{text:'For safety, this app only answers requests that carry the session key from the link printed in the terminal when you ran "python -m codereview serve". Open that link again (it starts with http://127.0.0.1).'}))));
 }
+/* phone view: give every table cell its column name, so a row can be shown as a card */
+function labelCells(root){ root.querySelectorAll('table').forEach(tb=>{ const hs=[...tb.querySelectorAll('thead th')].map(h=>h.textContent);
+  tb.querySelectorAll('tbody tr:not(.grp)').forEach(tr=>[...tr.children].forEach((td,k)=>{ if(!td.hasAttribute('data-label')) td.setAttribute('data-label',hs[k]||''); })); }); }
+new MutationObserver(()=>{ labelCells($('#view')); labelCells($('#layer')); }).observe(document.body,{childList:true,subtree:true});
 window.addEventListener('hashchange',()=>{ $('#layer').replaceChildren(); route(); $('.main').scrollTop=0; });
 $('#q').addEventListener('input',e=>{ state.q=e.target.value; state.page=0; if(location.hash!=='#issues') location.hash='#issues'; else viewIssues(); });
 $('#newScan').addEventListener('click',()=>{ if(STATUS) openScan(''); });

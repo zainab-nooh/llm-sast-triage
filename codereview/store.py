@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS results (
 CREATE TABLE IF NOT EXISTS reviews (
   run_id TEXT, finding_id TEXT, label TEXT, note TEXT, updated TEXT, PRIMARY KEY (run_id, finding_id)
 );
+CREATE TABLE IF NOT EXISTS review_log (run_id TEXT, finding_id TEXT, label TEXT, note TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS run_status (run_id TEXT PRIMARY KEY, partial TEXT);
 CREATE INDEX IF NOT EXISTS results_by_run ON results (run_id);
 """
@@ -100,9 +101,34 @@ def partial_reason(runs_dir: str, run_id: str) -> Optional[str]:
 def save_review(runs_dir: str, run_id: str, finding_id: str, label: str, note: str = "") -> None:
     """A person's decision on one alert (from the GUI). Kept apart from the model's verdict, never mixed with it."""
     con = connect(runs_dir)
+    now = datetime.now().isoformat(timespec="seconds")
     con.execute("INSERT OR REPLACE INTO reviews (run_id, finding_id, label, note, updated) VALUES (?,?,?,?,?)",
-                (run_id, finding_id, label, note, datetime.now().isoformat(timespec="seconds")))
+                (run_id, finding_id, label, note, now))
+    con.execute("INSERT INTO review_log (run_id, finding_id, label, note, at) VALUES (?,?,?,?,?)",
+                (run_id, finding_id, label, note, now))
     con.commit()
+
+
+def clear_review(runs_dir: str, run_id: str, finding_id: str) -> None:
+    """Take a decision back. The history keeps a 'cleared' entry, so the audit trail stays complete."""
+    con = connect(runs_dir)
+    con.execute("DELETE FROM reviews WHERE run_id=? AND finding_id=?", (run_id, finding_id))
+    con.execute("INSERT INTO review_log (run_id, finding_id, label, note, at) VALUES (?,?,?,?,?)",
+                (run_id, finding_id, "cleared", "", datetime.now().isoformat(timespec="seconds")))
+    con.commit()
+
+
+def load_review_log(runs_dir: str, run_id: str) -> dict:
+    """Every decision ever saved on each alert of this run, oldest first."""
+    out = {}
+    for fid, label, note, at in connect(runs_dir).execute(
+            "SELECT finding_id, label, note, at FROM review_log WHERE run_id=? ORDER BY rowid", (run_id,)):
+        out.setdefault(fid, []).append({"label": label, "note": note, "at": at})
+    return out
+
+
+def runs_with_reviews(runs_dir: str) -> List[str]:
+    return [r[0] for r in connect(runs_dir).execute("SELECT DISTINCT run_id FROM reviews")]
 
 
 def load_reviews(runs_dir: str, run_id: str) -> dict:
@@ -118,14 +144,15 @@ def list_runs(runs_dir: str) -> List[dict]:
     # One pass over the results table for all runs (fast even on a slow Docker folder link on Windows)
     stats = {rid: rest for rid, *rest in con.execute(
         "SELECT run_id, COUNT(*), SUM(json_extract(decision, '$.action') = 'suppress'), COALESCE(SUM(cost), 0), "
-        "COALESCE(SUM(seconds), 0) FROM results GROUP BY run_id")}
+        "COALESCE(SUM(seconds), 0), SUM(json_extract(decision, '$.action') != 'suppress' AND "
+        "json_extract(verdict, '$.verdict') = 'confirmed') FROM results GROUP BY run_id")}
     for rid, created, conf in con.execute("SELECT id, created, config FROM runs ORDER BY created DESC").fetchall():
         c = json.loads(conf)
-        n, hidden, cost, secs = stats.get(rid, (0, 0, 0, 0))
+        n, hidden, cost, secs, confirmed = stats.get(rid, (0, 0, 0, 0, 0))
         out.append({"id": rid, "created": created[:16].replace("T", " "), "target": c.get("target", ""),
                     "provider": c.get("provider", ""), "model": "scanner only" if c.get("skip_judge") else c.get("model", ""),
                     "threshold": c.get("threshold"), "context_level": c.get("context_level"),
-                    "alerts": n, "hidden": hidden or 0, "cost": round(cost, 4), "seconds": round(secs, 1),
+                    "alerts": n, "hidden": hidden or 0, "confirmed": confirmed or 0, "cost": round(cost, 4), "seconds": round(secs, 1),
                     "benchmark": bool(c.get("only_scored")), "partial": partial.get(rid)})
     return out
 
@@ -141,4 +168,18 @@ def average_call_cost(runs_dir: str, provider: str, model: Optional[str] = None)
         return None
     marks = ",".join("?" * len(ids))
     row = con.execute(f"SELECT AVG(cost) FROM results WHERE cost > 0 AND run_id IN ({marks})", ids).fetchone()  # nosec B608: only ? placeholders are inserted
+    return row[0]
+
+
+def average_call_seconds(runs_dir: str, provider: str, model: Optional[str] = None) -> Optional[float]:
+    """Average time of one model call in earlier runs with this provider and model, for the time estimate."""
+    con = connect(runs_dir)
+    q, args = "SELECT id FROM runs WHERE json_extract(config, '$.provider') = ?", [provider]
+    if model:
+        q, args = q + " AND json_extract(config, '$.model') = ?", args + [model]
+    ids = [r[0] for r in con.execute(q, args)]
+    if not ids:
+        return None
+    marks = ",".join("?" * len(ids))
+    row = con.execute(f"SELECT AVG(seconds) FROM results WHERE seconds > 0 AND run_id IN ({marks})", ids).fetchone()  # nosec B608: only ? placeholders are inserted
     return row[0]

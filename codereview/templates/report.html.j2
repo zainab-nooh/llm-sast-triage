@@ -7,116 +7,126 @@
 <title>SAST Triage report · {{ project }} · {{ run_id }}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Same design as the web app: "G Sonar" (white, hairline borders, square corners, one clear blue, serif headings) */
-:root{--bg:#ffffff;--surface:#ffffff;--surface-2:#f6f7f9;--line:#e4e7eb;--line-strong:#cdd2d9;--ink:#0d1726;--text:#253042;--muted:#5d6878;--faint:#8b94a3;
-  --accent:#1d5fd1;--accent-soft:#eef3fc;--r:2px;
-  --crit:#c42b45;--crit-soft:#fbe7ea;--high:#d8641f;--high-soft:#fdeee3;--med:#b8890a;--med-soft:#fbf3dc;--low:#3f6fd1;--low-soft:#e7eefc;
-  --ok:#1f8a4c;--ok-soft:#e3f4ea;--warn:#b07500;--warn-soft:#fdf2db;--muted-soft:#eef1f5;
-  --code-bg:#0f1622;--code-fg:#d6deea;--code-dim:#5c6a80;--code-hl:#3a2230;--code-cite:#1b2a42;
-  --logo-main:#445ea9;--logo-by:#daaea9;
+/* Same design as the web app: "Terracotta" (warm paper, white rounded cards, one terracotta accent, serif headings) */
+:root{--bg:#f1efec;--surface:#ffffff;--surface-2:#f6f3ef;--line:#e5e0d9;--line-strong:#d3ccc2;--ink:#171412;--text:#3a332e;--muted:#766c64;--faint:#a0968d;
+  --accent:#c8714e;--accent-soft:#f8e6dc;
+  --crit:#b8452f;--crit-soft:#f7e0d8;--high:#d27a45;--high-soft:#f8e8dc;--med:#a88a3e;--med-soft:#f3ebd5;--low:#6d5f55;--low-soft:#efebe6;
+  --ok:#557a4f;--ok-soft:#e2ecdd;--warn:#c8894a;--warn-soft:#f6ead9;--muted-soft:#efebe6;
+  --code-bg:#0f1622;--code-fg:#d6deea;--code-dim:#5c6a80;--code-hl:#3a2230;--code-cite:#2a2620;
+  --logo-main:#2b2522;--logo-by:#daaea9;--rad:22px;--rad-s:99px;
+  --shadow:0 1px 2px rgba(20,16,12,.04),0 8px 24px -16px rgba(20,16,12,.18);
   --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--serif:"Source Serif 4",Georgia,serif;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
-@media (prefers-color-scheme:dark){:root{--bg:#0b0f16;--surface:#0f141d;--surface-2:#131a25;--line:#212a37;--line-strong:#2e3949;--ink:#eef2f8;--text:#d4dbe6;--muted:#97a2b3;--faint:#6f7a8c;
-  --accent:#6f9dff;--accent-soft:#142441;
-  --crit:#ff6b81;--crit-soft:#3a1820;--high:#ff9a5c;--high-soft:#3a2416;--med:#e8c04a;--med-soft:#352c12;--low:#7ea2ff;--low-soft:#18233d;
-  --ok:#4cc985;--ok-soft:#14301f;--warn:#e8b04a;--warn-soft:#352a12;--muted-soft:#1b2430;
-  --code-bg:#080c12;--code-hl:#3a2230;--code-cite:#152238;--logo-main:#9fb3ec}}
+@media (prefers-color-scheme:dark){:root{--bg:#141110;--surface:#1c1816;--surface-2:#241f1c;--line:#2f2925;--line-strong:#3d3631;--ink:#f3ece6;--text:#d8cec6;--muted:#a39589;--faint:#7b6e64;
+  --accent:#e08a63;--accent-soft:#3a2419;
+  --crit:#ef7a62;--crit-soft:#3a1c15;--high:#f0a06b;--high-soft:#38251a;--med:#d8b866;--med-soft:#322a15;--low:#b3a398;--low-soft:#262120;
+  --ok:#8dbb84;--ok-soft:#1c2b19;--warn:#e8ad6e;--warn-soft:#382818;--muted-soft:#262120;
+  --code-bg:#0c0a09;--code-cite:#2a2420;--logo-main:#f3e6dd;--shadow:0 1px 2px rgba(0,0,0,.3)}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 var(--sans);font-variant-numeric:tabular-nums}
-.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 64px}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 64px}
 h1,h2,h3{color:var(--ink);font-family:var(--serif);font-weight:500;margin:0}
 a{color:var(--accent)}
 .label{text-transform:uppercase;letter-spacing:.09em;font-size:11px;font-weight:600;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--rad);box-shadow:var(--shadow)}
 /* header */
-.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 24px;padding:24px 28px}
 .logo{display:block;position:relative;width:150px;aspect-ratio:594/130}
 .logo i{position:absolute;inset:0;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
 .logo .lm{background:var(--logo-main)} .logo .lb{background:var(--logo-by)}
-.head .title{flex:1;min-width:240px}
-.head h1{font-size:30px;letter-spacing:-.01em;line-height:1.15;margin-top:4px}
-.meta{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:16px;font-size:13px;color:var(--muted)}
+.head .title{flex:1;min-width:220px}
+.head h1{font-size:32px;letter-spacing:-.01em;line-height:1.15;margin-top:4px;overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;gap:8px;font-size:13px;color:var(--muted)}
+.meta span{border:1px solid var(--line);background:var(--surface-2);border-radius:var(--rad-s);padding:4px 12px;max-width:100%;overflow-wrap:anywhere}
 .meta b{color:var(--text);font-weight:600}
+.head .meta span{background:var(--surface)}
+.runmeta{padding:0 28px 22px}
 /* KPI tiles */
-.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;margin:24px 0;border:1px solid var(--line)}
-.kpi{padding:14px 16px;border-right:1px solid var(--line);display:grid;gap:2px}
-.kpi:last-child{border-right:0}
-.kpi .value{font-family:var(--serif);font-size:32px;font-weight:500;color:var(--ink);line-height:1.1}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
+.kpi{padding:16px 18px;display:grid;gap:2px}
+.kpi .label::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px;background:var(--line-strong)}
+.kpi.crit .label::before{background:var(--crit)} .kpi.warn .label::before{background:var(--warn)} .kpi.ok .label::before{background:var(--ok)}
+.kpi .value{font-family:var(--serif);font-size:34px;font-weight:400;color:var(--ink);line-height:1.1}
 .kpi .foot{font-size:12px;color:var(--muted)}
-.kpi.crit .value{color:var(--crit)} .kpi.warn .value{color:var(--warn)} .kpi.ok .value{color:var(--ok)}
 /* sections */
-section{margin-top:32px}
-.sec-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:12px}
+section{margin-top:16px;padding:20px 24px}
+.sec-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px}
 .sec-h h2{font-size:22px}
+.sec-h h2::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:10px;vertical-align:middle}
+#confirmed .sec-h h2::before{background:var(--crit)} #uncertain .sec-h h2::before,#scanner_only .sec-h h2::before{background:var(--warn)} #suppressed .sec-h h2::before{background:var(--faint)}
 .sec-h .n{font-family:var(--serif);font-size:22px;color:var(--faint)}
 .sec-h p{flex-basis:100%;margin:0;color:var(--muted);font-size:13px}
 /* summary table */
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:.09em;font-size:11px;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line-strong)}
-td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
 td.num,th.num{text-align:right}
 .tablewrap{overflow-x:auto}
 /* badges */
-.sev{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r);white-space:nowrap;text-transform:uppercase;letter-spacing:.06em}
-.sev::before{content:"";width:7px;height:7px;background:currentColor}
+.sev{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 10px;border-radius:var(--rad-s);white-space:nowrap}
+.sev::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .sev.critical{color:var(--crit);background:var(--crit-soft)} .sev.high{color:var(--high);background:var(--high-soft)}
 .sev.medium{color:var(--med);background:var(--med-soft)} .sev.low{color:var(--low);background:var(--low-soft)}
-.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border:1px solid var(--line-strong);border-radius:var(--r);color:var(--muted);white-space:nowrap}
-.pill.confirmed{color:var(--crit);border-color:var(--crit)} .pill.uncertain{color:var(--warn);border-color:var(--warn)}
-.pill.suppressed{color:var(--ok);border-color:var(--ok)} .pill.mine{color:var(--accent);border-color:var(--accent)}
+.sev{text-transform:capitalize}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:var(--rad-s);white-space:nowrap;background:var(--accent-soft);color:var(--accent)}
 /* issue cards */
-details.issue{border:1px solid var(--line);border-left:3px solid var(--line-strong);background:var(--surface);margin:8px 0}
-details.issue.critical{border-left-color:var(--crit)} details.issue.high{border-left-color:var(--high)} details.issue.medium{border-left-color:var(--med)}
-details.issue>summary{list-style:none;cursor:pointer;padding:12px 16px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 14px;align-items:center}
+details.issue{border:1px solid var(--line);border-radius:16px;background:var(--surface);margin:10px 0;overflow:hidden}
+details.issue>summary{list-style:none;cursor:pointer;padding:14px 18px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 14px;align-items:center}
 details.issue>summary::-webkit-details-marker{display:none}
 details.issue>summary:hover{background:var(--surface-2)}
+details.issue[open]>summary{border-bottom:1px solid var(--line)}
 .loc{font-family:var(--mono);font-size:13px;color:var(--ink);overflow-wrap:anywhere}
-.sub{grid-column:2/4;font-size:12.5px;color:var(--muted)}
+.sub{grid-column:2/4;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .conf{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);white-space:nowrap}
-.bar{width:64px;height:4px;background:var(--muted-soft)} .bar span{display:block;height:100%;background:var(--accent)}
-.body{padding:4px 16px 16px;display:grid;gap:12px;border-top:1px solid var(--line)}
-.body p{margin:0}
-.box{border:1px solid var(--line);padding:10px 12px;background:var(--surface-2)}
+.bar{width:64px;height:5px;background:var(--muted-soft);border-radius:99px;overflow:hidden} .bar span{display:block;height:100%;background:var(--accent);border-radius:99px}
+.body{padding:4px 18px 18px;display:grid;gap:12px;min-width:0}
+.body p{margin:0;overflow-wrap:anywhere}
+.box{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--surface-2);overflow-wrap:anywhere}
 .box .label{display:block;margin-bottom:4px}
-.box.fix{border-left:3px solid var(--ok)}
-.box.mine{border-left:3px solid var(--accent)}
+.box.fix{background:var(--ok-soft);border-color:transparent} .box.fix .label{color:var(--ok)}
+.box.mine{background:var(--accent-soft);border-color:transparent} .box.mine .label{color:var(--accent)}
 .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.facts div{border:1px solid var(--line);padding:8px 10px;font-size:12.5px;display:grid;gap:2px}
-.facts b{color:var(--ink)}
-ul.ev{margin:0;padding-left:18px} ul.ev li{margin:2px 0}
-ul.ev code{font-family:var(--mono);font-size:12px;color:var(--ink)}
-pre{margin:0;background:var(--code-bg);color:var(--code-fg);font:12.5px/1.6 var(--mono);padding:10px 0;overflow-x:auto}
+.facts div{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:8px 12px;font-size:12.5px;display:grid;gap:2px;min-width:0}
+.facts b{color:var(--ink);overflow-wrap:anywhere}
+ul.ev{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+ul.ev li{border:1px solid var(--line);border-radius:10px;padding:8px 12px;overflow-wrap:anywhere}
+ul.ev code{display:block;font-family:var(--mono);font-size:12px;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+pre{margin:0;background:var(--code-bg);color:var(--code-fg);font:12.5px/1.6 var(--mono);padding:12px 0;overflow-x:auto;border-radius:12px}
 pre .ln{display:block;padding:0 14px;white-space:pre}
 pre .ln i{font-style:normal;color:var(--code-dim);display:inline-block;width:4.5ch;text-align:right;margin-right:14px;user-select:none}
 pre .ln.hit{background:var(--code-hl);box-shadow:inset 3px 0 0 var(--crit)}
 pre .ln.cite{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
-.legend{font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
-.legend span::before{content:"";display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:4px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .legend .h::before{background:var(--code-hl);box-shadow:inset 3px 0 0 var(--crit)} .legend .c::before{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
 .msg{font-size:12.5px;color:var(--muted)}
 .empty{color:var(--muted);font-size:13px;padding:8px 0}
-.partial{margin-top:20px;border:1px solid var(--warn);background:var(--warn-soft);padding:10px 14px;font-size:13px}
-.note{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);display:grid;gap:6px}
-@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{border-bottom:1px solid var(--line)}.facts{grid-template-columns:minmax(0,1fr)}
+.partial{margin-top:16px;border:1px solid var(--warn);background:var(--warn-soft);border-radius:14px;padding:12px 16px;font-size:13px}
+.note{margin-top:24px;padding:0 8px;font-size:12.5px;color:var(--muted);display:grid;gap:6px}
+@media (max-width:760px){.wrap{padding:16px 12px 48px}.head{padding:20px}.runmeta{padding:0 20px 20px}section{padding:16px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi:last-child{grid-column:1/-1}.facts{grid-template-columns:minmax(0,1fr)}
   details.issue>summary{grid-template-columns:minmax(0,1fr)}.sub{grid-column:auto}}
-@media print{:root{--bg:#fff;--surface:#fff;--surface-2:#f6f7f9;--ink:#000;--text:#222}
-  body{font-size:11.5px}.wrap{max-width:none;padding:0}details.issue{break-inside:avoid}
+@media print{:root{--bg:#fff;--surface:#fff;--shadow:none}
+  body{font-size:11.5px}.wrap{max-width:none;padding:0}details.issue,.kpi{break-inside:avoid}
   a{color:inherit;text-decoration:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
 
+<div class="card">
 <header class="head">
   <div class="title">
     {% if logo_main %}<span class="logo" role="img" aria-label="SAST Triage by ZN"><i class="lm" style="--m:url({{ logo_main }})"></i><i class="lb" style="--m:url({{ logo_by }})"></i></span>{% endif %}
     <div class="label" style="margin-top:14px">Code review report</div>
     <h1>{{ project }}</h1>
   </div>
-  <div class="meta" style="margin-top:0">
+  <div class="meta">
     <span>Run <b>{{ run_id }}</b></span>
     <span>Generated <b>{{ generated }}</b></span>
   </div>
 </header>
-<div class="meta">
+<div class="meta runmeta">
   <span>Model <b>{{ config.model }}</b> ({{ config.provider }})</span>
   <span>Context level <b>{{ config.context_level }}</b></span>
   <span>Hide threshold <b>{{ config.threshold }}</b></span>
@@ -124,17 +134,18 @@ pre .ln.cite{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
   <span>AI time <b>{{ "%.0f"|format(seconds) }} s</b></span>
   {% if config.target %}<span>Folder <b>{{ config.target }}</b></span>{% endif %}
 </div>
+</div>
 
 {% if partial %}<div class="partial"><b>Partial scan.</b> The AI check stopped early because {{ partial }}. Alerts it did not reach are listed under "Not checked by the AI" and were kept, never hidden. Do not use this run for evaluation.</div>{% endif %}
 <div class="kpis">
-  <div class="kpi"><span class="label">Alerts</span><span class="value">{{ total }}</span><span class="foot">from Semgrep and Bandit</span></div>
-  <div class="kpi crit"><span class="label">Confirmed</span><span class="value">{{ groups.confirmed|length }}</span><span class="foot">fix first</span></div>
-  <div class="kpi warn"><span class="label">Needs review</span><span class="value">{{ groups.uncertain|length + groups.scanner_only|length }}</span><span class="foot">a person decides</span></div>
-  <div class="kpi ok"><span class="label">Hidden</span><span class="value">{{ groups.suppressed|length }}</span><span class="foot">{{ hidden_pct }}% less noise</span></div>
-  <div class="kpi"><span class="label">Reviewed by you</span><span class="value">{{ reviewed }}</span><span class="foot">decisions saved in the app</span></div>
+  <div class="kpi card"><span class="label">Alerts</span><span class="value">{{ total }}</span><span class="foot">from Semgrep and Bandit</span></div>
+  <div class="kpi card crit"><span class="label">Confirmed</span><span class="value">{{ groups.confirmed|length }}</span><span class="foot">fix first</span></div>
+  <div class="kpi card warn"><span class="label">Needs review</span><span class="value">{{ groups.uncertain|length + groups.scanner_only|length }}</span><span class="foot">a person decides</span></div>
+  <div class="kpi card ok"><span class="label">Hidden</span><span class="value">{{ groups.suppressed|length }}</span><span class="foot">{{ hidden_pct }}% less noise</span></div>
+  <div class="kpi card"><span class="label">Reviewed by you</span><span class="value">{{ reviewed }}</span><span class="foot">decisions saved in the app</span></div>
 </div>
 
-<section>
+<section class="card">
   <div class="sec-h"><h2>Summary by weakness</h2></div>
   {% if by_cwe %}<div class="tablewrap"><table>
     <thead><tr><th>Weakness</th><th>Severity</th><th>OWASP Top 10</th><th class="num">Alerts</th><th class="num">Confirmed</th><th class="num">Review</th><th class="num">Hidden</th></tr></thead>
@@ -146,7 +157,7 @@ pre .ln.cite{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
 </section>
 
 {% for key, title, blurb in group_info %}{% set items = groups[key] %}{% if items or key != "scanner_only" %}
-<section id="{{ key }}">
+<section class="card" id="{{ key }}">
   <div class="sec-h"><h2>{{ title }}</h2><span class="n">{{ items|length }}</span><p>{{ blurb }}</p></div>
   {% if items and key != "scanner_only" %}<div class="legend"><span class="h">flagged line</span><span class="c">line the AI cited as evidence</span></div>{% endif %}
   {% for i in items %}
@@ -154,7 +165,7 @@ pre .ln.cite{background:var(--code-cite);box-shadow:inset 3px 0 0 var(--accent)}
     <summary>
       <span class="sev {{ i.sev }}">{{ i.sev }}</span>
       <span class="loc">{{ i.f.file|replace("\\", "/") }}:{{ i.f.start_line }}</span>
-      <span>{% if i.review_label %}<span class="pill mine">You: {{ i.review_label }}</span> {% endif %}{% if i.v %}<span class="conf"><span class="bar"><span style="width:{{ i.conf_pct }}%"></span></span>{{ "%.2f"|format(i.conf or 0) }}</span>{% endif %}</span>
+      <span>{% if i.review_label %}<span class="pill">You: {{ i.review_label }}</span> {% endif %}{% if i.v %}<span class="conf"><span class="bar"><span style="width:{{ i.conf_pct }}%"></span></span>{{ "%.2f"|format(i.conf or 0) }}</span>{% endif %}</span>
       <span class="sub"><b>{{ i.cwe }}</b> {{ i.name }}{% if i.owasp %} · {{ i.owasp }}{% endif %} · {{ i.f.tool }} {{ i.rule }}{% if i.f.also_reported_by %} (also {{ i.f.also_reported_by|join(", ") }}){% endif %}</span>
     </summary>
     <div class="body">

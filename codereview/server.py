@@ -104,6 +104,28 @@ class ScanRequest(BaseModel):
     max_cost: Optional[float] = Field(default=None, ge=0, le=1000)   # spending limit in US$ (empty = no limit)
 
 
+class StartRequest(BaseModel):
+    max_cost: Optional[float] = Field(default=None, ge=0, le=1000)   # the spending limit can still be changed here
+
+
+class FolderCheck(BaseModel):
+    folder: str = Field(min_length=1, max_length=1000)
+
+
+SKIP_DIRS = {".git", ".venv", "venv", "env", "node_modules", "__pycache__", ".tox", "site-packages"}
+
+
+def count_py_files(folder: Path, cap: int = 20000) -> int:
+    """How many Python files the scanners will read (stops counting at cap, so huge folders stay quick)."""
+    n = 0
+    for _root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        n += sum(f.endswith(".py") for f in files)
+        if n >= cap:
+            break
+    return n
+
+
 class ReviewRequest(BaseModel):
     run: str = Field(max_length=64)
     fid: str = Field(max_length=200)
@@ -198,22 +220,27 @@ class Jobs:
                 estimate = round(n_groups * per_call, 4)
             else:
                 per_call, estimate = 0.0, 0.0
+            provider, model = MODELS[job["model"]]
+            per_sec = store.average_call_seconds(self.runs_dir, provider, model)   # from earlier runs, None if none
+            seconds = round(n_groups * per_sec) if per_sec is not None else None
             warnings = [f"{name} produced no results file, so its alerts are missing. Check the terminal for its error."
                         for name, out in (("Semgrep", sarif), ("Bandit", bandit)) if not out]
             if self.get(jid).get("_cancel"):
                 self.update(jid, state="cancelled")
                 return
-            self.update(jid, state="counted", alerts=alerts, groups=n_groups, estimate=estimate, warnings=warnings,
+            self.update(jid, state="counted", alerts=alerts, groups=n_groups, estimate=estimate, warnings=warnings, est_seconds=seconds,
                         per_call=round(per_call, 5), sarif=str(sarif) if sarif else None,
                         bandit=str(bandit) if bandit else None)
         except Exception as e:     # show the person what went wrong instead of hanging
             traceback.print_exc()
             self.update(jid, state="error", error=f"The scanners failed: {type(e).__name__}: {_clean_error(e)}")
 
-    def start(self, jid: str) -> dict:
+    def start(self, jid: str, max_cost: Optional[float] = None, set_limit: bool = False) -> dict:
         job = self.get(jid)
         if job["state"] != "counted":
             raise HTTPException(409, "This scan is not waiting to start.")
+        if set_limit:                          # the page sends the limit again, in case it was changed after the cost check
+            self.update(jid, max_cost=max_cost or None)
         self.update(jid, state="queued")
         threading.Thread(target=self._judge, args=(jid,), daemon=True).start()
         return self.public(self.get(jid))
@@ -396,6 +423,7 @@ def issues_for(runs_dir: str, run_ids: List[str]) -> List[dict]:
         target = cfg.get("target", "")
         project = project_name(target)
         reviews = store.load_reviews(runs_dir, rid)
+        log = store.load_review_log(runs_dir, rid)
         rows = store.load_run(runs_dir, rid)
         prev = previous_run(runs_dir, rid, runs)
         keys = fingerprints(rows, target) if prev else {}
@@ -403,7 +431,30 @@ def issues_for(runs_dir: str, run_ids: List[str]) -> List[dict]:
         for row in rows:
             i = to_issue(rid, project, row, reviews.get(row["finding"]["id"]))
             i["new"] = (keys[row["finding"]["id"]] not in old) if prev else None   # None: first scan of this folder
+            i["history"] = log.get(row["finding"]["id"], [])
             out.append(i)
+    return out
+
+
+def scan_history(runs_dir: str, cache: dict) -> List[dict]:
+    """Every scan, oldest first, with how many alerts were new and how many had gone since the scan before it
+    (same folder, matched by fingerprint). Finished scans never change, so their counts are cached."""
+    runs = store.list_runs(runs_dir)
+    out = []
+    for r in reversed(runs):
+        prev = previous_run(runs_dir, r["id"], runs)
+        key = (r["id"], r["alerts"], prev)
+        if key not in cache:
+            new = gone = None
+            if prev:
+                a = set(fingerprints(store.load_run(runs_dir, prev), r["target"]).values())
+                b = set(fingerprints(store.load_run(runs_dir, r["id"]), r["target"]).values())
+                new, gone = len(b - a), len(a - b)
+            cache[key] = (new, gone)
+        new, gone = cache[key]
+        out.append({"id": r["id"], "created": r["created"], "project": project_name(r["target"]), "target": r["target"],
+                    "model": r["model"], "provider": r["provider"], "alerts": r["alerts"], "hidden": r["hidden"],
+                    "confirmed": r["confirmed"], "partial": r["partial"], "new": new, "gone": gone})
     return out
 
 
@@ -470,6 +521,7 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}", *extra_hosts}   # extra_hosts: only for tests
     app = FastAPI(title="SAST Triage", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.token, app.state.jobs = token, jobs
+    history_cache: dict = {}
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
@@ -522,10 +574,33 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
     @app.post("/api/reviews")
     def review(req: ReviewRequest):
         _check_run(req.run)
+        if req.label == "clear":
+            store.clear_review(runs_dir, req.run, req.fid)
+            return {"ok": True}
         if req.label not in LABELS:
             raise HTTPException(400, "Unknown label")
         store.save_review(runs_dir, req.run, req.fid, req.label, req.note)
         return {"ok": True}
+
+    @app.get("/api/history")
+    def history():
+        return scan_history(runs_dir, history_cache)
+
+    @app.get("/api/decisions.csv")
+    def decisions_csv():
+        """Every decision a person saved, on any scan, with the note and when it was last changed."""
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["project", "file", "line", "cwe", "severity", "ai_result", "ai_verdict", "ai_confidence",
+                    "your_decision", "your_note", "decided_at", "scan"])
+        for i in issues_for(runs_dir, store.runs_with_reviews(runs_dir)):
+            r = i["review"]
+            if not r:
+                continue
+            w.writerow([safe_cell(x) for x in (i["project"], i["file"], i["line"], i["cwe"], i["sev"], i["group"],
+                                                i["verdict"], i["conf"], r["label"], r["note"], r["updated"], i["run"])])
+        return Response(buf.getvalue(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="decisions.csv"'})
     @app.get("/api/compare")
     def compare(a: str, b: str):
         _check_run(a)
@@ -545,8 +620,18 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
         return jobs.public(jobs.get(jid))
 
     @app.post("/api/scans/{jid}/start")
-    def start(jid: str):
-        return jobs.start(jid)
+    def start(jid: str, req: Optional[StartRequest] = None):
+        return jobs.start(jid, req.max_cost if req else None, set_limit=req is not None)
+
+    @app.post("/api/check-folder")
+    def check_folder(req: FolderCheck):
+        """Before a scan: is this a usable GitHub link, or a folder that exists on this computer (or in Docker)?"""
+        if parse_github(req.folder):       # raises a clear 400 for a malformed GitHub link; no download here
+            return {"kind": "github", "ok": True}
+        folder = resolve_folder(req.folder)
+        if not folder:
+            return {"kind": "folder", "ok": False}
+        return {"kind": "folder", "ok": True, "py_files": count_py_files(folder), "project": project_name(str(folder))}
 
     @app.post("/api/scans/{jid}/cancel")
     def cancel(jid: str):

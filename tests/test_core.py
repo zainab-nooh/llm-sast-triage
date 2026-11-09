@@ -504,3 +504,48 @@ def test_ci_command(tmp_path, monkeypatch):
                      echo=out.append)
     assert code == 0          # scanner only: nothing confirmed, nothing hidden
     assert not any(r.get("suppressions") for r in _json.loads((tmp_path / "s.sarif").read_text())["runs"][0]["results"])
+
+
+def test_new_scan_page_checks_the_folder_and_takes_the_limit_at_start(tmp_path, monkeypatch):
+    from codereview import server
+    client, _, h = _web(tmp_path)
+    ok = client.post("/api/check-folder", headers=h, json={"folder": TARGET}).json()
+    assert ok["kind"] == "folder" and ok["ok"] and ok["py_files"] > 0
+    gone = client.post("/api/check-folder", headers=h, json={"folder": str(tmp_path / "moved-away")}).json()
+    assert gone == {"kind": "folder", "ok": False}
+    assert client.post("/api/check-folder", headers=h, json={"folder": "https://github.com/owner/repo"}).json()["kind"] == "github"
+    assert client.post("/api/check-folder", headers=h, json={"folder": "https://github.com/owner"}).status_code == 400
+    assert client.post("/api/check-folder", json={"folder": TARGET}).status_code == 401          # token still needed
+    real_collect = server.pipeline.collect
+    monkeypatch.setattr(server.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(server.pipeline, "collect", lambda cfg, d: real_collect(
+        cfg.model_copy(update={"sarif_path": str(FIX / "semgrep.sarif"), "bandit_path": str(FIX / "bandit.json")}), d))
+    job = client.post("/api/scans", headers=h, json={"folder": TARGET, "cwes": list(server.CWES), "model": "mock", "max_cost": 1}).json()
+    import time
+    for _ in range(100):
+        job = client.get(f"/api/scans/{job['id']}", headers=h).json()
+        if job["state"] != "counting":
+            break
+        time.sleep(0.05)
+    assert job["state"] == "counted" and "est_seconds" in job
+    assert client.post(f"/api/scans/{job['id']}/start", headers=h, json={"max_cost": -1}).status_code == 422
+    job = client.post(f"/api/scans/{job['id']}/start", headers=h, json={"max_cost": 0.5}).json()
+    assert job["max_cost"] == 0.5
+
+
+def test_decisions_keep_history_can_be_cleared_and_exported(tmp_path):
+    client, run_id, h = _web(tmp_path)
+    fid = client.get("/api/issues", headers=h).json()[0]["fid"]
+    post = lambda label, note="": client.post("/api/reviews", headers=h, json={"run": run_id, "fid": fid, "label": label, "note": note})
+    assert post("fp", "checked by hand").status_code == 200
+    assert post("real", "=HYPERLINK(1)").status_code == 200
+    assert post("clear").status_code == 200                                   # take the decision back
+    issue = {i["fid"]: i for i in client.get("/api/issues", headers=h).json()}[fid]
+    assert issue["review"] is None
+    assert [x["label"] for x in issue["history"]] == ["fp", "real", "cleared"]   # the trail is kept
+    assert post("unsure", "ask the maintainer").status_code == 200
+    csv_text = client.get("/api/decisions.csv", headers=h).text
+    assert "ask the maintainer" in csv_text and csv_text.count("\n") == 2       # header + the one decision left
+    assert client.get("/api/decisions.csv").status_code == 401
+    hist = client.get("/api/history", headers=h).json()
+    assert hist[-1]["id"] == run_id and hist[-1]["new"] is None and "confirmed" in hist[-1]

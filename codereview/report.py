@@ -1,4 +1,4 @@
-"""Step 9: HTML report from stored results. Same look as the web app (G Sonar, light and dark), one self-contained file."""
+"""Step 9: HTML report from stored results. Same look as the web app (Terracotta, light and dark), one self-contained file."""
 import base64
 import re
 from datetime import datetime

@@ -1,50 +1,65 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-style="meridian3">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SAST Triage</title>
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="app">
   <nav class="nav" aria-label="Main">
-    <div class="brand"><span class="logo" role="img" aria-label="SAST Triage by ZN"><i class="lm"></i><i class="lb"></i></span></div>
-    <div class="nav-group">
-      <div class="nav-label">Workspace</div>
-      <a href="#dashboard" data-page="dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
-      <a href="#issues" data-page="issues"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V7z"/><path d="M12 8v5M12 16.5v.5"/></svg>Issues<span class="count" id="navOpen"></span></a>
-      <a href="#projects" data-page="projects"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Projects</a>
-      <a href="#scans" data-page="scans"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>Scans</a>
-      <a href="#compare" data-page="compare"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18"/><path d="M3 8h5M16 16h5"/></svg>Compare scans</a>
+    <span class="logo" role="img" aria-label="SAST Triage by ZN"><i class="lm"></i><i class="lb"></i></span>
+    <div>
+      <div class="nav-label">Overview</div>
+      <a href="#dashboard" data-v="dashboard">Dashboard</a>
+      <a href="#report" data-v="report">OWASP Top 10</a>
     </div>
-    <div class="nav-group">
+    <div>
+      <div class="nav-label">Triage</div>
+      <a href="#issues" data-v="issues">Triage inbox<span class="count" id="navCount"></span></a>
+      <a href="#review" data-v="review">Needs your review<span class="count warn" id="navReview"></span></a>
+      <a href="#decisions" data-v="decisions">Your decisions<span class="count ok" id="navMine"></span></a>
+    </div>
+    <div>
+      <div class="nav-label">Scans</div>
+      <a href="#newscan" data-v="newscan">New scan</a>
+      <a href="#projects" data-v="projects">Projects</a>
+      <a href="#scans" data-v="scans">Scan history</a>
+      <a href="#compare" data-v="compare">Compare scans</a>
+    </div>
+    <div>
       <div class="nav-label">Setup</div>
-      <a href="#config" data-page="config"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>Models &amp; settings</a>
-      <a href="#integrations" data-page="integrations"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 4-6 3-11 4.5"/></svg>GitHub</a>
+      <a href="#config" data-v="config">Models &amp; settings</a>
+      <a href="#integrations" data-v="integrations">GitHub</a>
     </div>
     <div class="nav-foot">
+      <div class="runbox" id="runbox" hidden></div>
       <div><span class="dot"></span>Running on this computer</div>
+      <div id="footLast"></div>
       <div id="footModel">Checking setup…</div>
-      <div>Threshold 0.6 · context level 2</div>
     </div>
   </nav>
   <div class="main">
     <header class="top">
-      <div><div class="crumb" id="crumb">Workspace</div><h1 id="pageTitle">Dashboard</h1></div>
-      <div class="spacer"></div>
-      <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="Search file, rule or type" aria-label="Search issues"></label>
-      <button class="btn theme-btn" id="themeBtn" type="button"></button>
-      <button class="btn primary" id="newScan" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New scan</button>
-      <nav class="mobile-nav" id="mnav" aria-label="Pages"></nav>
+      <span class="logo mlogo" role="img" aria-label="SAST Triage by ZN"><i class="lm"></i><i class="lb"></i></span>
+      <div><div class="crumb top-c" id="crumb">Workspace</div><h1 id="title">Dashboard</h1></div>
+      <span class="sp"></span>
+      <span class="live" id="live"><span class="dot"></span><span id="liveTxt">Live</span></span>
+      <input class="gsearch" id="gsearch" type="search" placeholder="Search file, rule or type" aria-label="Search file, rule or type (press Enter)">
+      <button class="tbtn themesw" id="appTheme" type="button">Dark</button>
+      <button class="go newscan" id="newScan" type="button">New scan</button>
+      <nav class="tabs-m" id="mnav" aria-label="Pages"></nav>
     </header>
+    <div class="fbar" id="fbar" hidden></div>
     <div class="content" id="view"><div class="empty">Loading…</div></div>
   </div>
 </div>
 <div id="layer"></div>
+<div class="tip" id="tip" hidden></div>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,29 @@
+# Public online demo of the SAST Triage web app (for a free Docker host such as Render).
+# Shows the sample results in demo/ (made with scripts/make_demo_data.py). Visitors may scan small public GitHub
+# repositories with the demo model only: no API key is ever in this image or used by it.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    SEMGREP_SEND_METRICS=off SEMGREP_ENABLE_VERSION_CHECK=0
+# git: to download the public GitHub repositories visitors ask to scan
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+# The pinned Semgrep community rules (Python only), the same commit as the evaluation and the GitHub Action
+RUN git clone --quiet --filter=blob:none --no-checkout https://github.com/semgrep/semgrep-rules.git data/semgrep-rules \
+    && git -C data/semgrep-rules sparse-checkout set python \
+    && git -C data/semgrep-rules checkout --quiet 9bbf021d0acffa3095fcffd17b2bc7787eb4796d \
+    && rm -rf data/semgrep-rules/.git
+RUN useradd --create-home --uid 10001 triage
+COPY --chown=root:root codereview codereview
+COPY --chown=root:root policy policy
+COPY --chown=root:root rubrics rubrics
+COPY --chown=root:root rules rules
+COPY --chown=root:root demo demo
+USER triage
+ENV HOME=/tmp
+# The demo data is copied to /tmp at start, so scans and report exports can be written; the image stays read-only.
+# Everything in /tmp is lost when the host restarts the demo, which keeps it tidy. PORT is set by the host.
+CMD ["sh", "-c", "rm -rf /tmp/demo && cp -r demo /tmp/demo && exec python -m codereview serve --demo --no-browser --host 0.0.0.0 --port ${PORT:-8765} --runs /tmp/demo"]

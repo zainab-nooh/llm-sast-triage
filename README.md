@@ -147,6 +147,14 @@ In the web app press **New scan**, type `sample_target` (or `/scan` in Docker), 
 - **Compare scans:** which alerts changed result between two scans (matched by code, not line number).
 - **Light and dark mode.**
 
+### Public online demo
+
+`python -m codereview serve --demo --runs demo` shows the sample results in `demo/` to anyone, without a session key.
+Visitors can scan small public GitHub repositories (up to 300 Python files, one scan at a time) with the demo model
+only, so no API key is used. Saving decisions and scanning local folders are turned off.
+`scripts/make_demo_data.py` builds `demo/` from your own scans of public projects and removes local folder paths
+and decision notes. `Dockerfile.demo` runs the same thing on a free Docker host such as Render.
+
 ## Command line
 
 | Command | What it does |

@@ -585,3 +585,9 @@ body{margin:0}
 @media (max-width:760px){.cmsel{max-width:100%;flex:1 1 100%}}
 .mlogo{display:none}
 @media (max-width:760px){.mlogo{display:block;width:132px;margin:2px 0 4px;flex:0 0 100%;max-width:132px}.top .crumb.top-c{display:none}}
+.demobar{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:9px 28px;background:var(--accent-soft);color:var(--ink);font-size:13px;border-bottom:1px solid var(--line)}
+.demobar a{margin-left:auto;color:var(--accent);font-weight:600}
+@media (max-width:760px){.demobar{padding:8px 16px}.demobar a{margin-left:0}}
+.demonote{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:0 20px 4px;padding:14px 16px;border-radius:14px;background:var(--accent-soft);color:var(--ink);font-size:13px;line-height:1.5}
+.demonote>div{flex:1 1 320px;min-width:0}
+.demonote .go{width:auto;text-decoration:none;display:inline-flex;flex:0 0 auto}

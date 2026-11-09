@@ -30,3 +30,6 @@ security_tests/
 !tests/fixtures/bandit.json
 .patch-backup-readme/
 .patch-backup-mobile-speed/
+.patch-backup-*/
+# reports the demo writes next to its data
+demo/*/

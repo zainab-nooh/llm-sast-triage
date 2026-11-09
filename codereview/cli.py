@@ -134,7 +134,9 @@ def ci_cmd(target: str = typer.Argument(..., help="folder to scan, relative to t
 def serve_cmd(port: int = typer.Option(8765, help="port on this computer"),
               browser: bool = typer.Option(True, help="open the browser (--no-browser to only print the link)"),
               host: str = typer.Option("127.0.0.1", help="address to listen on; keep 127.0.0.1. Only the Docker image uses 0.0.0.0, "
-                                                        "and compose.yaml then publishes the port on 127.0.0.1 only")):
+                                                        "and compose.yaml then publishes the port on 127.0.0.1 only"),
+              demo: bool = typer.Option(False, help="public read-only demo: no token, sample results only, nothing can be changed"),
+              runs: str = typer.Option("", help="results folder to show (default: runs)")):
     """Start the web app on this computer only (127.0.0.1). Open the printed link; it holds this session's token."""
     import secrets
     import webbrowser
@@ -143,12 +145,17 @@ def serve_cmd(port: int = typer.Option(8765, help="port on this computer"),
 
     from .server import create_app
 
+    if demo:
+        typer.echo(f"SAST Triage read-only demo on {host}:{port}. Nothing can be changed and no API key is used.")
+        uvicorn.run(create_app(runs_dir=runs or None, port=port, demo=True), host=host, port=port, log_level="warning",
+                    proxy_headers=True, forwarded_allow_ips="*")
+        return
     token = secrets.token_urlsafe(32)
     url = f"http://127.0.0.1:{port}/#t={token}"
     typer.echo(f"SAST Triage is running on this computer only.\nOpen this link (it contains your session key, do not share it):\n  {url}\nPress Ctrl+C to stop.")
     if browser:
         webbrowser.open(url)
-    uvicorn.run(create_app(token=token, port=port), host=host, port=port, log_level="warning")
+    uvicorn.run(create_app(runs_dir=runs or None, token=token, port=port), host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":

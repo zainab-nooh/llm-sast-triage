@@ -13,6 +13,9 @@ Security (this app can read folders and spend API money, so only its owner may u
 - Code, file names and model text are untrusted: the page only ever shows them as plain text.
 - CSV cells that start with = + - @ get a leading ' so spreadsheet programs do not run them as formulas.
 - The API key stays in .env. The API only says whether one exists.
+- serve --demo (the public demo) is the one exception: anyone may read the results without a token. Visitors may
+  scan small public GitHub repositories with the demo model only (no AI, no API key, one scan at a time);
+  saving decisions and local folders are refused.
 """
 import csv
 import io
@@ -136,8 +139,9 @@ class ReviewRequest(BaseModel):
 class Jobs:
     """Scans run in a background thread so the page stays responsive. Only one AI check runs at a time."""
 
-    def __init__(self, runs_dir: str):
+    def __init__(self, runs_dir: str, demo: bool = False):
         self.runs_dir = runs_dir
+        self.demo = demo                       # public demo: GitHub links only, demo model only, small repos, one at a time
         self.jobs: dict = {}
         self.lock = threading.Lock()           # protects self.jobs
         self.judge_lock = threading.Lock()     # one AI run at a time: keeps cost and the database simple
@@ -159,6 +163,13 @@ class Jobs:
 
     def create(self, req: ScanRequest) -> dict:
         gh = parse_github(req.folder, req.ref)
+        if self.demo:
+            if not gh:
+                raise HTTPException(400, "The online demo can only scan public GitHub links, like https://github.com/owner/repository")
+            if self.active():
+                raise HTTPException(429, "Another demo scan is running right now. Please try again in a minute.")
+            req.model = "mock"                 # the demo never calls a paid or local AI model
+            _rmtree(Path(self.runs_dir).resolve() / "app-repos")   # keep only the newest downloaded repository
         if gh:
             if not shutil.which("git"):
                 raise HTTPException(400, "Git is not installed, so GitHub links cannot be downloaded.")
@@ -196,11 +207,14 @@ class Jobs:
         if job["state"] == "cloning":
             try:
                 owner, repo, ref = job["_gh"]
-                commit = clone_repo(owner, repo, ref, Path(job["folder"]))
+                commit = clone_repo(owner, repo, ref, Path(job["folder"]), (DEMO_MAX_FILES, DEMO_MAX_ALL) if self.demo else None)
                 if self.get(jid).get("_cancel"):
                     self.update(jid, state="cancelled")
                     return
                 self.update(jid, state="counting", commit=commit)
+            except TooBig as e:
+                self.update(jid, state="error", error=str(e))
+                return
             except Exception as e:
                 traceback.print_exc()
                 self.update(jid, state="error", error=f"Could not download the repository (is it public, and is the branch or commit right?): {_clean_error(e)}")
@@ -331,19 +345,37 @@ def _rmtree(path: Path) -> None:
         shutil.rmtree(path, onerror=make_writable)
 
 
-def clone_repo(owner: str, repo: str, ref: str, dest: Path) -> str:
+class TooBig(Exception):
+    """The repository is over the online demo's limits (checked before any file content is downloaded)."""
+
+
+def clone_repo(owner: str, repo: str, ref: str, dest: Path, limits: Optional[tuple] = None) -> str:
     """Download only the needed version (no history, no submodules). The code is only read by the scanners,
-    never run. Returns the short commit id, so results can be repeated."""
+    never run. Returns the short commit id, so results can be repeated.
+    limits=(max Python files, max files): the demo first downloads only the list of file names, and refuses
+    big repositories before downloading any file content."""
     _rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    _git(["clone", "--depth", "1", "--no-recurse-submodules", "--quiet", f"https://github.com/{owner}/{repo}.git", str(dest)])
+    first = ["--filter=blob:none", "--no-checkout"] if limits else []
+    _git(["clone", "--depth", "1", "--no-recurse-submodules", "--quiet", *first, f"https://github.com/{owner}/{repo}.git", str(dest)])
+    target = "HEAD"
     if ref:
         try:
-            _git(["fetch", "--depth", "1", "--quiet", "origin", ref], cwd=dest)
+            _git(["fetch", "--depth", "1", "--quiet", *(["--filter=blob:none"] if limits else []), "origin", ref], cwd=dest)
         except RuntimeError as e:
             if re.fullmatch(r"[0-9a-fA-F]{4,39}", ref):    # GitHub only serves a commit by its full 40-character id
                 raise RuntimeError("use the full 40-character commit id, not the short one") from e
             raise
+        target = "FETCH_HEAD"
+    if limits:
+        names = _git(["ls-tree", "-r", "--name-only", target], cwd=dest).splitlines()   # names only: no file content yet
+        py = sum(n.endswith(".py") for n in names)
+        if py > limits[0] or len(names) > limits[1]:
+            _rmtree(dest)
+            raise TooBig(f"This repository has {py} Python files and {len(names)} files in all. The online demo takes up to "
+                         f"{limits[0]} Python files and {limits[1]} files. Install the app from GitHub to scan big projects.")
+        _git(["checkout", "--quiet", "--detach", target], cwd=dest)
+    elif ref:
         _git(["checkout", "--quiet", "--detach", "FETCH_HEAD"], cwd=dest)
     return _git(["rev-parse", "--short", "HEAD"], cwd=dest)
 
@@ -513,11 +545,19 @@ def sarif_for(issues: List[dict]) -> dict:
 
 
 # ------------------------------------------------------------------ the app
+DEMO_BLOCKED = "Saving decisions is turned off in the online demo. Install the app from GitHub to use every feature."
+DEMO_POSTS = re.compile(r"^/api/(scans|scans/[0-9a-f]{12}/(start|cancel)|check-folder)$")   # what demo visitors may do
+DEMO_MAX_FILES = 300          # Python files per demo scan
+DEMO_MAX_ALL = 3000           # files of any kind per demo scan
+
+
 def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port: int = 8765,
-               extra_hosts: tuple = ()) -> FastAPI:
+               extra_hosts: tuple = (), demo: bool = False) -> FastAPI:
+    """demo=True: the public read-only demo. Anyone may read the sample results (no token, any host), but every
+    call that changes something or starts work (scans, decisions, folder checks) is refused, and no API key is used."""
     runs_dir = runs_dir or Config().runs_dir
     token = token or secrets.token_urlsafe(32)
-    jobs = Jobs(runs_dir)
+    jobs = Jobs(runs_dir, demo=demo)
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}", *extra_hosts}   # extra_hosts: only for tests
     app = FastAPI(title="SAST Triage", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.token, app.state.jobs = token, jobs
@@ -525,6 +565,15 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
+        if demo:
+            if request.url.path.startswith("/api/") and request.method not in ("GET", "HEAD") and not DEMO_POSTS.match(request.url.path):
+                return JSONResponse({"detail": DEMO_BLOCKED}, status_code=403)
+            resp = await call_next(request)
+            resp.headers["Content-Security-Policy"] = CSP
+            resp.headers["X-Content-Type-Options"] = "nosniff"
+            resp.headers["Referrer-Policy"] = "no-referrer"
+            resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+            return resp
         host = request.headers.get("host", "")
         if host not in allowed_hosts:
             return JSONResponse({"detail": "Wrong host"}, status_code=403)
@@ -546,13 +595,13 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
     def status():
         rules = policy.load_policy(Config().policy_path)
         return {"tools": {t: bool(shutil.which(t)) for t in ("semgrep", "bandit")},
-                "anthropic_key": bool(os.getenv("ANTHROPIC_API_KEY")),
+                "anthropic_key": False if demo else bool(os.getenv("ANTHROPIC_API_KEY")), "demo": demo,
                 "context_level": CONTEXT_LEVEL, "threshold": THRESHOLD,
                 "models": {k: {"provider": p, "model": m} for k, (p, m) in MODELS.items()},
                 "cwes": {c: {"name": n, "sev": s, "owasp": rules.get(c, {}).get("owasp", ""),
                          "rule": rules.get(c, {}).get("id", ""), "title": rules.get(c, {}).get("title", "")}
                      for c, (n, s) in CWES.items()},
-                "runs_dir": str(runs_dir)}
+                "runs_dir": "demo" if demo else str(runs_dir)}
 
     @app.get("/api/runs")
     def runs():
@@ -628,6 +677,8 @@ def create_app(runs_dir: Optional[str] = None, token: Optional[str] = None, port
         """Before a scan: is this a usable GitHub link, or a folder that exists on this computer (or in Docker)?"""
         if parse_github(req.folder):       # raises a clear 400 for a malformed GitHub link; no download here
             return {"kind": "github", "ok": True}
+        if demo:
+            return {"kind": "folder", "ok": False, "error": "The online demo can only scan public GitHub links."}
         folder = resolve_folder(req.folder)
         if not folder:
             return {"kind": "folder", "ok": False}

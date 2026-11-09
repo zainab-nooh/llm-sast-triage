@@ -107,5 +107,6 @@ def build(runs_dir: str, run_id: str) -> Path:
         cost=cost, seconds=seconds, partial=store.partial_reason(runs_dir, run_id), generated=datetime.now().strftime("%d %b %Y, %H:%M"),
         logo_main=_logo("logo-main.png"), logo_by=_logo("logo-by.png"))
     out = Path(runs_dir) / run_id / "report.html"
+    out.parent.mkdir(parents=True, exist_ok=True)   # the scan's folder may be missing (results copied, or the demo data)
     out.write_text(html, encoding="utf-8")  # utf-8, or Windows fails on characters like emoji in model text
     return out

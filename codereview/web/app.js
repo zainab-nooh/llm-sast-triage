@@ -99,7 +99,8 @@ async function load(){
 }
 function drawFoot(){
   const m = STATUS.models.claude.model, last = RUNS[0];
-  $('#footModel').textContent = STATUS.anthropic_key ? `${modelName(m)} · threshold ${STATUS.threshold}` : 'No Claude API key yet';
+  if(STATUS.demo){ setDemo(); $('#footModel').textContent = 'Claude Haiku 5.5 results · threshold ' + STATUS.threshold; }
+  else $('#footModel').textContent = STATUS.anthropic_key ? `${modelName(m)} · threshold ${STATUS.threshold}` : 'No Claude API key yet';
   $('#footLast').textContent = last ? `Last scan: ${last.project}, ${stamp(last.created)}` : 'No scans yet';
 }
 
@@ -757,7 +758,7 @@ function drawPathStatus(){
   const s = $('#nsStatus'), refBox = $('#nsRefBox'); if(!s) return;
   const c = NS.check;
   s.className = 'nss' + (c ? (c.ok ? ' good' : ' bad') : '');
-  s.textContent = !NS.path.trim() ? 'Paste a folder path on this computer, or a public GitHub link.'
+  s.textContent = !NS.path.trim() ? (STATUS.demo ? 'Paste a public GitHub link (up to 300 Python files).' : 'Paste a folder path on this computer, or a public GitHub link.')
     : !c ? 'Checking…'
     : c.error ? c.error
     : c.kind === 'github' ? 'Public GitHub repository. It is downloaded first (code is only read, never run), then scanned.'
@@ -768,6 +769,8 @@ function drawPathStatus(){
 function viewNewScan(){
   const v = $('#view'); v.replaceChildren();
   if(!NS.cwes) NS.cwes = new Set(Object.keys(STATUS.cwes));
+  const DEMO = !!STATUS.demo;
+  if(DEMO) NS.model = 'mock';
   if(!NS.model) NS.model = STATUS.anthropic_key ? 'claude' : 'mock';
   const j = NS.job;
   if(j && ['queued','judging','done','cancelled','error'].includes(j.state)){ v.append(runningPanel(j)); return; }
@@ -775,13 +778,13 @@ function viewNewScan(){
   const lab = (t, f) => el('label', {class: 'nsl', for: f || null, text: t});
   const invalidate = async () => { if(NS.job && NS.job.state === 'counted'){ try { await api(`/api/scans/${NS.job.id}/cancel`, {method: 'POST'}); } catch(e){} } NS.job = null; drawRunBox(); viewNewScan(); };
   let timer = null;
-  const path = el('input', {class: 'nsi mono', id: 'nsPath', autocomplete: 'off', placeholder: 'C:\\Users\\you\\code\\my-project   or   https://github.com/owner/repo', value: NS.path, disabled: locked, 'aria-label': 'Folder path or GitHub link',
+  const path = el('input', {class: 'nsi mono', id: 'nsPath', autocomplete: 'off', placeholder: DEMO ? 'https://github.com/owner/repo' : 'C:\\Users\\you\\code\\my-project   or   https://github.com/owner/repo', value: NS.path, disabled: locked, 'aria-label': 'Folder path or GitHub link',
     oninput: e => { NS.path = e.target.value; NS.check = null; drawPathStatus(); clearTimeout(timer); timer = setTimeout(checkPath, 350); }});
   const ref = el('input', {class: 'nsi mono', id: 'nsRef', autocomplete: 'off', maxlength: 100, placeholder: 'empty = latest version', value: NS.ref, disabled: locked, oninput: e => { NS.ref = e.target.value; }});
   const checks = el('div', {class: 'nsrow'}, ...Object.entries(STATUS.cwes).map(([c, x]) => el('label', {class: 'chk'},
     el('input', {type: 'checkbox', checked: NS.cwes.has(c), disabled: locked, onchange: e => { e.target.checked ? NS.cwes.add(c) : NS.cwes.delete(c); }}), `${c} ${x.name}`)));
   const model = el('select', {class: 'nsi', id: 'nsModel', disabled: locked, onchange: e => { NS.model = e.target.value; viewNewScan(); }},
-    ...[['claude', 'Claude Haiku 5.5 (default, the evaluated model)'], ['sonnet', 'Claude Sonnet 5.5 (stronger, about 20× the cost)'], ['qwen', 'Qwen3 14B on this computer (free, slow, Ollama)'], ['mock', 'Demo model (no AI, free)']]
+    ...[['claude', 'Claude Haiku 5.5 (default, the evaluated model)'], ['sonnet', 'Claude Sonnet 5.5 (stronger, about 20× the cost)'], ['qwen', 'Qwen3 14B on this computer (free, slow, Ollama)'], ['mock', 'Demo model (no AI, free)']].filter(([k]) => !DEMO || k === 'mock')
       .map(([k, t]) => el('option', {value: k, selected: NS.model === k, disabled: paidModel(k) && !STATUS.anthropic_key}, paidModel(k) && !STATUS.anthropic_key ? t + ' · add ANTHROPIC_API_KEY to .env' : t)));
   const paid = paidModel(NS.model);
   const limit = el('input', {class: 'nsi', id: 'nsLimit', type: 'number', min: 0, step: '0.01', inputmode: 'decimal', placeholder: 'no limit', value: NS.limit, disabled: !paid,
@@ -832,11 +835,12 @@ function viewNewScan(){
   }
   const again = RUNS.find(r => r.target && NS.path && r.target === NS.path.trim());
   v.append(el('div', {class: 'panel nsp'},
-    el('div', {class: 'ph'}, el('h2', {text: again ? `Scan ${again.project} again` : 'New scan'}), el('span', {class: 'sub', text: again ? 'Last folder filled in.' : 'Paste a folder path or GitHub link, then check the cost.'})),
+    el('div', {class: 'ph'}, el('h2', {text: again ? `Scan ${again.project} again` : 'New scan'}), el('span', {class: 'sub', text: DEMO ? 'Paste a public GitHub link. The online demo uses the demo model.' : again ? 'Last folder filled in.' : 'Paste a folder path or GitHub link, then check the cost.'})),
+    DEMO ? demoNote() : null,
     missing.length ? el('div', {class: 'runban warnban'}, el('b', {text: 'Not found: ' + missing.join(', ') + '. '}), 'Activate the project\'s virtual environment, then start the app again.') : null,
     el('div', {class: 'nsgrid'},
       el('div', {class: 'nsc'},
-        el('div', {class: 'nsf'}, lab('Folder path or GitHub link', 'nsPath'), path, el('span', {class: 'nss', id: 'nsStatus'})),
+        el('div', {class: 'nsf'}, lab(DEMO ? 'Public GitHub link' : 'Folder path or GitHub link', 'nsPath'), path, el('span', {class: 'nss', id: 'nsStatus'})),
         el('div', {class: 'nsf', id: 'nsRefBox', hidden: true}, lab('Branch, tag or commit (optional)', 'nsRef'), ref),
         el('div', {class: 'nsf'}, lab('Scanners'), el('div', {class: 'nsrow'}, ...['Semgrep', 'Bandit'].map(t => el('span', {class: 'lock'}, t, ' ', el('b', {text: STATUS.tools[t.toLowerCase()] ? 'ready' : 'not found'})))) ),
         el('div', {class: 'nsf'}, lab('Weakness types'), checks)),
@@ -958,6 +962,22 @@ function viewIntegrations(){
     kvPanel('What appears on GitHub',[['Code scanning (SARIF)','Alerts on the changed lines, with the AI verdict and fix'],['Auto-ignored alerts','Uploaded as dismissed, with the AI reason'],['Pull request check','Fails when a confirmed critical or high issue is added']])));
 }
 
+/* ---------------- public read-only demo ---------------- */
+const REPO='https://github.com/zainab-nooh/llm-sast-triage';
+function demoNote(){
+  return el('div',{class:'demonote'},
+    el('div',{},el('b',{text:'Online demo: the demo model only. '}),el('span',{text:'It runs the real scanners (Semgrep and Bandit) and the full pipeline, but the AI step is replaced by a few fixed rules, so its verdicts are only an example. Scans are shared with other visitors and limited to small public repositories, one at a time. The full app also runs Claude Haiku 5.5, Claude Sonnet 5.5 or a local Qwen model, on your own folders.'})),
+    el('a',{class:'go',href:REPO,target:'_blank',rel:'noopener noreferrer'},'Get it on GitHub'));
+}
+function setDemo(){
+  if(document.documentElement.classList.contains('demo')) return;
+  document.documentElement.classList.add('demo');
+  const b=el('div',{class:'demobar'},el('b',{text:'Online demo.'}),el('span',{text:' Sample results from public projects. Scans use the demo model, and saving decisions is off.'}),
+    el('a',{href:REPO,target:'_blank',rel:'noopener noreferrer',text:'Get the app on GitHub'}));
+  $('.main').prepend(b);
+  const foot=$('.nav-foot'); if(foot&&foot.children[1]) foot.children[1].replaceChildren(el('span',{class:'dot'}),'Public demo, read-only');
+}
+
 /* ---------------- routing: every page has its own link (#dashboard, #issues, #issue/<id>, ...) ---------------- */
 const PAGES={dashboard:['Overview','Dashboard',viewDash],report:['Overview','OWASP Top 10',viewOwasp],issues:['Triage','Triage inbox',viewInbox],review:['Triage','Needs your review',viewInbox],
   decisions:['Triage','Your decisions',viewDecisions],newscan:['Scans','New scan',viewNewScan],projects:['Scans','Projects',viewProjects],scans:['Scans','Scan history',viewScans],
@@ -1040,4 +1060,4 @@ async function boot(){
   LOADING=false; route();
   setInterval(liveTick,5000); setInterval(drawLive,10000);
 }
-if(TOKEN) boot(); else noToken();
+boot();   // a normal install answers 401 without the token, which shows the start-link message; the public demo needs no token

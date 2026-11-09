@@ -385,7 +385,7 @@ def test_github_links_are_checked_before_download(tmp_path, monkeypatch):
                                                       "model": "mock"}).status_code == 400
     calls = []
     monkeypatch.setattr(server.shutil, "which", lambda name: "/usr/bin/" + name)
-    monkeypatch.setattr(server, "clone_repo", lambda o, r, ref, dest: calls.append((o, r, ref, dest)) or "abc1234")
+    monkeypatch.setattr(server, "clone_repo", lambda o, r, ref, dest, limits=None: calls.append((o, r, ref, dest)) or "abc1234")
     monkeypatch.setattr(server.pipeline, "collect", lambda cfg, d: (None, None, []))
     job = client.post("/api/scans", headers=h, json={"folder": "https://github.com/o/r", "ref": "v2", "cwes": ["CWE-89"], "model": "mock"}).json()
     assert job["state"] == "cloning" and job["project"] == "r" and "_gh" not in job
@@ -549,3 +549,23 @@ def test_decisions_keep_history_can_be_cleared_and_exported(tmp_path):
     assert client.get("/api/decisions.csv").status_code == 401
     hist = client.get("/api/history", headers=h).json()
     assert hist[-1]["id"] == run_id and hist[-1]["new"] is None and "confirmed" in hist[-1]
+
+
+def test_demo_mode_needs_no_token_and_limits_what_visitors_can_do(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from codereview import server
+    _, run_id, _ = _web(tmp_path)                                   # fills tmp_path with one stored scan
+    demo = TestClient(server.create_app(runs_dir=str(tmp_path), demo=True))
+    st = demo.get("/api/status", headers={"Host": "demo.example.org"}).json()   # any host, no token
+    assert st["demo"] is True and st["anthropic_key"] is False and st["runs_dir"] == "demo"
+    assert demo.get("/api/issues").status_code == 200
+    assert demo.get(f"/api/runs/{run_id}/report.html").status_code == 200
+    r = demo.post("/api/reviews", json={"run": run_id, "fid": "x", "label": "real"})
+    assert r.status_code == 403 and "online demo" in r.json()["detail"]          # decisions are off
+    assert demo.post("/api/check-folder", json={"folder": "."}).json()["ok"] is False   # no local folders
+    r = demo.post("/api/scans", json={"folder": ".", "model": "claude", "cwes": ["CWE-89"]})
+    assert r.status_code == 400 and "GitHub" in r.json()["detail"]               # GitHub links only
+    assert server.DEMO_POSTS.match("/api/scans/0123456789ab/start") and not server.DEMO_POSTS.match("/api/reviews")
+    normal = TestClient(server.create_app(runs_dir=str(tmp_path), token="t", extra_hosts=("testserver",)))
+    assert normal.get("/api/status").status_code == 401             # the normal app still needs its token

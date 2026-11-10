@@ -141,10 +141,15 @@ function renderBar(){
   if(S.bin!==null) pills.append(fp(`Confidence ${(S.bin/10).toFixed(1)}–${((S.bin+1)/10).toFixed(1)}`,()=>S.bin=null));
   if(S.otile) pills.append(fp(`OWASP ${S.otile}`,()=>S.otile=null));
   b.append(pills);
-  const n=matching().length;
+  const n=drillSet()[1].length;
   const dirty=S.proj.size||S.sev.size<SEVS().length||S.onlyNew||S.cwe.size<CW.length||S.grp.size<3||S.bin!==null||S.otile;
   if(dirty) b.append(el('button',{class:'reset',type:'button',onclick:()=>{S.proj.clear();S.sev=new Set(['critical','high','medium','low']);S.onlyNew=false;CW.forEach(c=>S.cwe.add(c));['Confirmed','Review','Hidden'].forEach(g=>S.grp.add(g));S.bin=null;S.otile=null;render();}},'Reset'));
-  b.append(el('button',{class:'go',type:'button',onclick:()=>drill('These filters',matching())},`Open these ${n}`));
+  b.append(el('button',{class:'go',type:'button',onclick:()=>{ const [t,r]=drillSet(); drill(t,r); }},`Open these ${n}`));
+}
+/* "Open these" exports what the page shows: on the inbox pages that is the open tab, elsewhere the filters */
+function drillSet(){
+  if(S.view!=='issues'&&S.view!=='review') return ['These filters',matching()];
+  const {T,TN}=ibTabs(); return [(S.view==='review'?'Needs your review':'Triage inbox')+(S.ib.tab==='Review'&&S.view==='review'?'':' · '+TN[S.ib.tab]),T[S.ib.tab]];
 }
 
 /* ---------------- scan history helpers (for the trend lines) ---------------- */
@@ -561,10 +566,11 @@ addEventListener('keydown',e=>{ if(!CUR||e.target.closest('textarea,input,select
 
 /* ---------------- triage inbox: list | code | analysis, like an email app ---------------- */
 S.ib={tab:'Review',id:null}; let INBOX=null;
+const TN={Review:'Needs you',Confirmed:'Confirmed',Hidden:'Auto-ignored',Mine:'Decided'};
+function ibTabs(){ const rows=F({ignoreGrp:true});
+  return {rows,TN,T:{Review:rows.filter(a=>a.g==='Review'&&!a.mine),Confirmed:rows.filter(a=>a.g==='Confirmed'&&!a.mine),Hidden:rows.filter(a=>a.g==='Hidden'&&!a.mine),Mine:rows.filter(a=>a.mine)}}; }
 function viewInbox(){
-  const rows=F({ignoreGrp:true});
-  const T={Review:rows.filter(a=>a.g==='Review'&&!a.mine),Confirmed:rows.filter(a=>a.g==='Confirmed'&&!a.mine),Hidden:rows.filter(a=>a.g==='Hidden'&&!a.mine),Mine:rows.filter(a=>a.mine)};
-  const TN={Review:'Needs you',Confirmed:'Confirmed',Hidden:'Auto-ignored',Mine:'Decided'};
+  const {rows,T}=ibTabs();
   const list=T[S.ib.tab].slice().sort((x,y)=>SEVW[y.sev]-SEVW[x.sev]||(x.conf??1)-(y.conf??1)||x.file.localeCompare(y.file)||x.line-y.line);
   let i=list.findIndex(x=>x.id===S.ib.id); if(i<0) i=0; const a=list[i]; S.ib.id=a?a.id:null;
   INBOX={list,a,next:list[i+1]||list[i-1]||null};

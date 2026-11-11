@@ -1,4 +1,5 @@
 """Step 1: run Semgrep and Bandit and save their raw output."""
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,6 +16,11 @@ def run_semgrep(target: str, out_file: Path, configs) -> Optional[Path]:
     # --no-git-ignore: also scan folders that .gitignore hides (data/ is ignored in this project)
     cmd = [exe, "scan", "--sarif", "--output", str(out_file), "--metrics=off", "--quiet",
            "--disable-version-check", "--no-git-ignore"]
+    # Optional limits for small hosts (the online demo has 512 MB): fewer parallel jobs, a memory cap
+    if os.environ.get("CODEREVIEW_SEMGREP_JOBS"):
+        cmd += ["--jobs", os.environ["CODEREVIEW_SEMGREP_JOBS"]]
+    if os.environ.get("CODEREVIEW_SEMGREP_MAX_MEMORY"):
+        cmd += ["--max-memory", os.environ["CODEREVIEW_SEMGREP_MAX_MEMORY"]]
     for c in configs:
         cmd += ["--config", c]
     cmd.append(target)

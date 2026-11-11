@@ -24,6 +24,8 @@ COPY --chown=root:root rules rules
 COPY --chown=root:root demo demo
 USER triage
 ENV HOME=/tmp
+# Keep Semgrep inside the 512 MB demo limit (it otherwise starts one job per host CPU)
+ENV CODEREVIEW_SEMGREP_JOBS=1 CODEREVIEW_SEMGREP_MAX_MEMORY=200
 # The demo data is copied to /tmp at start, so scans and report exports can be written; the image stays read-only.
 # Everything in /tmp is lost when the host restarts the demo, which keeps it tidy. PORT is set by the host.
 CMD ["sh", "-c", "rm -rf /tmp/demo && cp -r demo /tmp/demo && exec python -m codereview serve --demo --no-browser --host 0.0.0.0 --port ${PORT:-8765} --runs /tmp/demo"]

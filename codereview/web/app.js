@@ -11,11 +11,15 @@ let TOKEN = '';
   else { try { TOKEN = localStorage.getItem('token') || ''; } catch(e) {} }
 })();
 
+/* Shown when the server cannot answer (it is restarting or out of memory). */
+const SERVER_BUSY = 'The server is busy or restarting. Please wait a minute and try again.';
 async function api(path, opts={}){
   const headers = Object.assign({'X-Token': TOKEN}, opts.body ? {'Content-Type':'application/json'} : {});
-  const r = await fetch(path, {method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
+  let r;
+  try { r = await fetch(path, {method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined}); }
+  catch(e) { const err = new Error(SERVER_BUSY); err.status = 0; throw err; }
   if (r.status === 401) { noToken(); throw new Error('no token'); }
-  if (!r.ok) { let msg = 'Something went wrong (' + r.status + ')'; try { const j = await r.json(); if (j.detail) msg = typeof j.detail === 'string' ? j.detail : 'The request was not valid.'; } catch(e) {} throw new Error(msg); }
+  if (!r.ok) { let msg = r.status >= 502 && r.status <= 504 ? SERVER_BUSY : 'Something went wrong (' + r.status + ')'; try { const j = await r.json(); if (j.detail) msg = typeof j.detail === 'string' ? j.detail : 'The request was not valid.'; } catch(e) {} const err = new Error(msg); err.status = r.status; throw err; }
   return opts.raw ? r : r.json();
 }
 async function download(path){
@@ -113,7 +117,8 @@ const SEVS = () => ['critical','high','medium'].concat(A.some(a=>a.sev==='low')?
 /* ---------------- filter bar ---------------- */
 function dropdown(label, items, set, id){
   const d=el('div',{class:'dd'}); let m=null;
-  const b=el('button',{class:'ddb',type:'button','aria-expanded':'false',id},label,set.size?el('span',{class:'n',text:set.size}):el('span',{class:'n',text:'all'}),' ▾');
+  const one=set.size===1?[...set][0]:null;
+  const b=el('button',{class:'ddb',type:'button','aria-expanded':'false',id,title:one?`${label}: ${one}`:label},label,one?el('span',{class:'n nm',text:one}):set.size?el('span',{class:'n',text:set.size}):el('span',{class:'n',text:'all'}),' ▾');
   b.onclick=e=>{e.stopPropagation(); if(m){m.remove();m=null;b.setAttribute('aria-expanded','false');return;}
     m=el('div',{class:'ddm',role:'group','aria-label':label},el('div',{class:'row'},el('button',{type:'button',onclick:()=>{set.clear();render();}},'Show all'),el('button',{type:'button',onclick:()=>{items.forEach(([k])=>set.add(k));render();}},'Tick all')),
       ...items.map(([k,n])=>el('label',{},el('input',{type:'checkbox',checked:set.has(k),onchange:e=>{e.target.checked?set.add(k):set.delete(k);render();}}),k,el('span',{text:n}))));
@@ -738,7 +743,7 @@ const NS = {path:'', ref:'', model:null, limit:'1.00', cwes:null, job:null, chec
 let pollTimer = null;
 const ACTIVE = s => ['cloning','counting','counted','queued','judging'].includes(s);
 const paidModel = m => m === 'claude' || m === 'sonnet';
-function jobLabel(j){ return {cloning:'Downloading',counting:'Scanners running',counted:'Cost checked, waiting for you',done:'Done',error:'Stopped',queued:'Queued',judging:'AI checking',cancelled:'Cancelled'}[j.state]||j.state; }
+function jobLabel(j){ return {lost:'Stopped (server restarted)',cloning:'Downloading',counting:'Scanners running',counted:'Cost checked, waiting for you',done:'Done',error:'Stopped',queued:'Queued',judging:'AI checking',cancelled:'Cancelled'}[j.state]||j.state; }
 
 function openScan(path, jobId){            // used by "Scan again", "New scan" buttons and the scan box in the sidebar
   if(jobId){ NS.job = JOBS.find(j => j.id === jobId) || {id: jobId, state: 'counting'}; pollJob(); }
@@ -748,7 +753,22 @@ function openScan(path, jobId){            // used by "Scan again", "New scan" b
 async function pollJob(){
   clearTimeout(pollTimer);
   if(!NS.job) return;
-  try { NS.job = await api('/api/scans/' + NS.job.id); } catch(e){ return; }
+  const id = NS.job.id;
+  try { const j = await api('/api/scans/' + id); NS.job = j; NS.fails = 0; NS.lostSince = 0; }
+  catch(e){
+    if(e.message === 'no token' || !NS.job || NS.job.id !== id) return;
+    /* 404 means the server restarted and forgot the scan; anything else, keep trying for about 90 seconds */
+    if(!NS.lostSince) NS.lostSince = Date.now();
+    if(e.status === 404 || Date.now() - NS.lostSince > 90000){
+      NS.job = Object.assign({}, NS.job, {state: 'lost'}); NS.lostSince = 0; drawRunBox();
+      if(S.view === 'newscan' && !$('#layer').children.length) viewNewScan();
+      toastMsg('The scan stopped because the server restarted. Please try again.'); return;
+    }
+    NS.job = Object.assign({}, NS.job, {offline: true});
+    if(S.view === 'newscan' && !$('#layer').children.length) viewNewScan();
+    pollTimer = setTimeout(pollJob, 3000); return;
+  }
+  if(!NS.since || NS.since.id !== id) NS.since = {id, t: Date.now()};
   drawRunBox();
   if(S.view === 'newscan' && !$('#layer').children.length) viewNewScan();
   if(['cloning','counting','queued','judging'].includes(NS.job.state)) pollTimer = setTimeout(pollJob, 900);
@@ -809,20 +829,26 @@ function viewNewScan(){
       ['Spending limit', paid ? (lim === null ? 'no limit' : money(lim)) : 'free model']];
     const est = el('div', {class: 'nsest'}, ...tiles.map(([l, x]) => el('div', {}, el('span', {text: l}), el('b', {text: x}))));
     const over = counted && lim !== null && job.estimate > lim;
-    const note = job && job.state === 'cloning' ? 'Downloading the repository…'
-      : job && job.state === 'counting' ? (job.cancelling ? 'Cancelling…' : 'Semgrep and Bandit are reading the code. No AI yet, so this is free.')
+    const lost = job && job.state === 'lost';
+    const took = job && NS.since && NS.since.id === job.id ? Math.round((Date.now() - NS.since.t) / 1000) : 0;
+    const so = took >= 20 ? ` ${Math.floor(took / 60)} min ${took % 60} s so far.` + (DEMO && took >= 60 ? ' On the online demo this can take a few minutes.' : '') : '';
+    const note = lost ? 'The scan stopped because the server restarted or was too busy. Nothing was saved. Wait a minute, then press Try again.'
+      : job && job.offline ? 'Lost contact with the server. Trying again…'
+      : job && job.state === 'cloning' ? 'Downloading the repository…' + so
+      : job && job.state === 'counting' ? (job.cancelling ? 'Cancelling…' : 'Semgrep and Bandit are reading the code. No AI yet, so this is free.' + so)
       : counted && !job.alerts ? 'No alerts of these types, so there is nothing for the AI to check.'
       : over ? `The estimate is above your limit, so about ${Math.floor(lim / (job.per_call || 1))} of ${job.groups} checks will run. The rest are kept for you, never hidden.`
       : null;
     const acts = el('div', {class: 'nsact'});
     if(!job) acts.append(el('button', {class: 'tbtn', type: 'button', disabled: missing.length > 0, onclick: startCheck}, 'Check cost'),
       el('button', {class: 'go', style: 'margin-left:0', type: 'button', disabled: true, title: 'Check the cost first'}, 'Start scan'));
+    else if(lost) acts.append(el('button', {class: 'go', style: 'margin-left:0', type: 'button', onclick: () => { NS.job = null; viewNewScan(); }}, 'Try again'));
     else if(!counted) acts.append(el('button', {class: 'tbtn danger', type: 'button', disabled: !!job.cancelling, onclick: cancelScan}, 'Cancel'));
     else acts.append(el('button', {class: 'tbtn', type: 'button', onclick: invalidate}, 'Change settings'),
       el('button', {class: 'go', style: 'margin-left:0', type: 'button', disabled: !job.alerts, onclick: startScan}, 'Start scan'));
     (job && job.warnings || []).forEach(w => acts.prepend(el('span', {class: 'nswarn', text: w})));
-    bar.replaceChildren(est, el('div', {class: 'nsside'}, note ? el('div', {class: 'nsnote' + (over ? ' warn' : ''), text: note}) : null,
-      job && !counted ? el('span', {class: 'prog indet'}, el('span')) : null, acts));
+    bar.replaceChildren(est, el('div', {class: 'nsside'}, note ? el('div', {class: 'nsnote' + (over || lost || job.offline ? ' warn' : ''), text: note}) : null,
+      job && !counted && !lost ? el('span', {class: 'prog indet'}, el('span')) : null, acts));
   }
   async function startCheck(){
     if(!NS.path.trim()){ toastMsg('Paste a folder path or GitHub link first'); path.focus(); return; }

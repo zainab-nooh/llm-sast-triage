@@ -591,3 +591,6 @@ body{margin:0}
 .demonote{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:0 20px 4px;padding:14px 16px;border-radius:14px;background:var(--accent-soft);color:var(--ink);font-size:13px;line-height:1.5}
 .demonote>div{flex:1 1 320px;min-width:0}
 .demonote .go{width:auto;text-decoration:none;display:inline-flex;flex:0 0 auto}
+
+/* One chosen project is shown by name (long names are cut with …) */
+.ddb .n.nm{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
